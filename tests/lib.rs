@@ -95,5 +95,5 @@ fn eat_own_dog_food() {
     assert_eq!(decoder.size().unwrap(), 1000000);
     assert_eq!(decoder.size().unwrap(), 1073741823);
     assert_eq!(decoder.float32().unwrap(), 3.141592653589793 as f32);
-    //assert_eq!(decoder.float64().unwrap(), 3.141592653589793);
+    assert_eq!(decoder.float64().unwrap(), 3.141592653589793);
 }

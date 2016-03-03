@@ -68,26 +68,36 @@ impl Decoder {
     pub fn float32(&mut self) -> Result<f32, ()> {
         let uint32 = try!(self.uint32());
 
-        let sign = uint32 >> 31;
-        let exponent = ((uint32 << 1) >> 24) - 127;
-        let mantissa = (uint32 << 9) >> 9;
+        let mut sign: f32 = (uint32 >> 31) as f32;
+        let exponent: f32 = (((uint32 << 1) >> 24) - 127) as f32;
+        let mut mantissa: f32 = ((uint32 << 9) >> 9) as f32;
+        mantissa = (mantissa / 8388608_f32 /* 2 ^ 23 */) + 1f32;
 
-        panic!(format!("sign {:?} exponent {:?} mantissa {:?}", sign, exponent, mantissa));
+        if sign == 0f32 {
+            sign = 1f32;
+        } else {
+            sign = -1f32;
+        }
 
-        Ok(0f32)
+        Ok(sign * mantissa * 2f32.powf(exponent))
     }
 
     pub fn float64(&mut self) -> Result<f64, ()> {
         let uint64 = (try!(self.uint32()) as u64) << 32 |
                      (try!(self.uint32()) as u64);
 
-        let sign = uint64 >> 63;
-        let exponent = ((uint64 << 1) >> 52) - 1023;
-        let mantissa = (uint64 << 12) >> 12;
+        let mut sign: f64 = (uint64 >> 63) as f64;
+        let exponent = (((uint64 << 1) >> 52) - 1023) as f64;
+        let mut mantissa = ((uint64 << 12) >> 12) as f64;
+        mantissa = (mantissa / 2251799813685248_f64 /* 2 ^ 51 */) + 1f64;
 
-        panic!(format!("sign {:?} exponent {:?} mantissa {:?}", sign, exponent, mantissa));
+        if sign == 0f64 {
+            sign = 1f64;
+        } else {
+            sign = -1f64;
+        }
 
-        Ok(0f64)
+        Ok(sign * mantissa * 2f64.powf(exponent))
     }
 
     pub fn size(&mut self) -> Result<usize, ()> {
