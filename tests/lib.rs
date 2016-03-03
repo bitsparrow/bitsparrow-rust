@@ -84,10 +84,9 @@ fn eat_own_dog_food() {
     assert_eq!(decoder.uint8().unwrap(), 200_u8);
     assert_eq!(decoder.uint16().unwrap(), 9001_u16);
     assert_eq!(decoder.uint32().unwrap(), 1234567890_u32);
-    // replace the folloing 3 with int tests once done!
-    decoder.uint8().unwrap();
-    decoder.uint16().unwrap();
-    decoder.uint32().unwrap();
+    assert_eq!(decoder.int8().unwrap(), -42);
+    assert_eq!(decoder.int16().unwrap(), -30000);
+    assert_eq!(decoder.int32().unwrap(), -1234567890);
     assert_eq!(decoder.string().unwrap(), "BitSparrow 🐦".to_string());
     assert_eq!(decoder.string().unwrap(), long_text);
     assert_eq!(decoder.blob().unwrap(), blob);
@@ -95,4 +94,6 @@ fn eat_own_dog_food() {
     assert_eq!(decoder.size().unwrap(), 10000);
     assert_eq!(decoder.size().unwrap(), 1000000);
     assert_eq!(decoder.size().unwrap(), 1073741823);
+    assert_eq!(decoder.float32().unwrap(), 3.141592653589793 as f32);
+    //assert_eq!(decoder.float64().unwrap(), 3.141592653589793);
 }
