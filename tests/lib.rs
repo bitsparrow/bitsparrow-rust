@@ -1,8 +1,11 @@
 extern crate bitsparrow;
 
+use bitsparrow::{Encoder, Decoder};
+
 #[test]
 fn eat_own_dog_food() {
-    let expected: Vec<u8> = vec![
+    const PI: f64 = 3.141592653589793;
+    let expected = vec![
         0xc8,0x23,0x29,0x49,0x96,0x02,0xd2,0xd6,0x8a,0xd0,0xb6,0x69,0xfd,
         0x2e,0x0f,0x42,0x69,0x74,0x53,0x70,0x61,0x72,0x72,0x6f,0x77,0x20,
         0xf0,0x9f,0x90,0xa6,0x83,0x69,0x53,0x70,0x61,0x72,0x72,0x6f,0x77,
@@ -76,24 +79,43 @@ fn eat_own_dog_food() {
         0x05,0x06,0x64,0xa7,0x10,0xc0,0x0f,0x42,0x40,0xff,0xff,0xff,0xff,
         0x40,0x49,0x0f,0xdb,0x40,0x09,0x21,0xfb,0x54,0x44,0x2d,0x18
     ];
-    let long_text = "Sparrow /ˈsper.oʊ/\n\nUnder the classification used in the Handbook of the Birds of the World (HBW) main groupings of the sparrows are the true sparrows (genus Passer), the snowfinches (typically one genus, Montifringilla), and the rock sparrows (Petronia and the pale rockfinch). These groups are similar to each other, and are each fairly homogeneous, especially Passer.[4] Some classifications also include the sparrow-weavers (Plocepasser) and several other African genera (otherwise classified among the weavers, Ploceidae)[4] which are morphologically similar to Passer.[5] According to a study of molecular and skeletal evidence by Jon Fjeldså and colleagues, the cinnamon ibon of the Philippines, previously considered to be a white-eye, is a sister taxon to the sparrows as defined by the HBW. They therefore classify it as its own subfamily within Passeridae.[5]".to_string();
-    let blob: Vec<u8> = vec![1,2,3,4,5,6];
+    let long_text = "Sparrow /ˈsper.oʊ/\n\nUnder the classification used in the Handbook of the Birds of the World (HBW) main groupings of the sparrows are the true sparrows (genus Passer), the snowfinches (typically one genus, Montifringilla), and the rock sparrows (Petronia and the pale rockfinch). These groups are similar to each other, and are each fairly homogeneous, especially Passer.[4] Some classifications also include the sparrow-weavers (Plocepasser) and several other African genera (otherwise classified among the weavers, Ploceidae)[4] which are morphologically similar to Passer.[5] According to a study of molecular and skeletal evidence by Jon Fjeldså and colleagues, the cinnamon ibon of the Philippines, previously considered to be a white-eye, is a sister taxon to the sparrows as defined by the HBW. They therefore classify it as its own subfamily within Passeridae.[5]";
+    let blob = [1,2,3,4,5,6];
 
-    let mut decoder = bitsparrow::Decoder::new(expected);
+    let buffer = Encoder::new()
+        .uint8(200)
+        .uint16(9001)
+        .uint32(1234567890)
+        .int8(-42)
+        .int16(-30000)
+        .int32(-1234567890)
+        .string("BitSparrow 🐦")
+        .string(long_text)
+        .blob(&blob)
+        .size(100)
+        .size(10000)
+        .size(1000000)
+        .size(1073741823)
+        .float32(PI as f32)
+        .float64(PI)
+        .encode();
 
-    assert_eq!(decoder.uint8().unwrap(), 200_u8);
-    assert_eq!(decoder.uint16().unwrap(), 9001_u16);
-    assert_eq!(decoder.uint32().unwrap(), 1234567890_u32);
+    assert_eq!(buffer, expected);
+
+    let mut decoder = Decoder::new(&buffer);
+    assert_eq!(decoder.uint8().unwrap(), 200);
+    assert_eq!(decoder.uint16().unwrap(), 9001);
+    assert_eq!(decoder.uint32().unwrap(), 1234567890);
     assert_eq!(decoder.int8().unwrap(), -42);
     assert_eq!(decoder.int16().unwrap(), -30000);
     assert_eq!(decoder.int32().unwrap(), -1234567890);
-    assert_eq!(decoder.string().unwrap(), "BitSparrow 🐦".to_string());
+    assert_eq!(decoder.string().unwrap(), "BitSparrow 🐦");
     assert_eq!(decoder.string().unwrap(), long_text);
     assert_eq!(decoder.blob().unwrap(), blob);
     assert_eq!(decoder.size().unwrap(), 100);
     assert_eq!(decoder.size().unwrap(), 10000);
     assert_eq!(decoder.size().unwrap(), 1000000);
     assert_eq!(decoder.size().unwrap(), 1073741823);
-    assert_eq!(decoder.float32().unwrap(), 3.141592653589793 as f32);
-    assert_eq!(decoder.float64().unwrap(), 3.141592653589793);
+    assert_eq!(decoder.float32().unwrap(), PI as f32);
+    assert_eq!(decoder.float64().unwrap(), PI);
 }

@@ -1,11 +1,106 @@
-pub struct Decoder {
-    index: usize,
-    length: usize,
+use std::mem;
+
+pub struct Encoder {
     data: Vec<u8>,
 }
 
-impl Decoder {
-    pub fn new(data: Vec<u8>) -> Decoder {
+impl Encoder {
+    pub fn new() -> Encoder {
+        Encoder {
+            data: Vec::new(),
+        }
+    }
+
+    pub fn uint8(&mut self, uint8: u8) -> &mut Encoder {
+        self.data.push(uint8);
+        return self;
+    }
+
+    pub fn uint16(&mut self, uint16: u16) -> &mut Encoder {
+        self.data.reserve(2);
+        self.data.push((uint16 >> 8) as u8);
+        self.data.push((uint16 & 0xFF) as u8);
+        return self;
+    }
+
+    pub fn uint32(&mut self, uint32: u32) -> &mut Encoder {
+        self.data.reserve(4);
+        self.data.push((uint32 >> 24) as u8);
+        self.data.push(((uint32 >> 16) & 0xFF) as u8);
+        self.data.push(((uint32 >> 8) & 0xFF) as u8);
+        self.data.push((uint32 & 0xFF) as u8);
+        return self;
+    }
+
+    pub fn int8(&mut self, int8: i8) -> &mut Encoder {
+        self.uint8(unsafe { mem::transmute_copy(&int8) })
+    }
+
+    pub fn int16(&mut self, int16: i16) -> &mut Encoder {
+        self.uint16(unsafe { mem::transmute_copy(&int16) })
+    }
+
+    pub fn int32(&mut self, int32: i32) -> &mut Encoder {
+        self.uint32(unsafe { mem::transmute_copy(&int32) })
+    }
+
+    pub fn float32(&mut self, float32: f32) -> &mut Encoder {
+        self.uint32(unsafe { mem::transmute_copy(&float32) })
+    }
+
+    pub fn float64(&mut self, float64: f64) -> &mut Encoder {
+        let uint64: u64 = unsafe { mem::transmute_copy(&float64) };
+        return self
+            .uint32((uint64 >> 32) as u32)
+            .uint32((uint64 & 0xFFFFFFFF) as u32);
+    }
+
+    pub fn size(&mut self, size: usize) -> &mut Encoder {
+        if size > 0x3fffffff {
+            return self.uint32(0xffffffff);
+        }
+
+        // can fit on 7 bits
+        if size < 0x80 {
+            return self.uint8(size as u8);
+        }
+
+        // can fit on 14 bits
+        if size < 0x4000 {
+            return self.uint16((size as u16) | 0x8000);
+        }
+
+        // use up to 30 bits
+        return self.uint32((size as u32) | 0xc0000000);
+    }
+
+    pub fn blob(&mut self, blob: &[u8]) -> &mut Encoder {
+        let mut size = blob.len();
+        if size > 0x3fffffff {
+            size = 0x3fffffff;
+        }
+        self.size(size);
+        self.data.extend_from_slice(&blob[..size]);
+        return self;
+    }
+
+    pub fn string(&mut self, string: &str) -> &mut Encoder {
+        self.blob(string.as_bytes())
+    }
+
+    pub fn encode(&self) -> Vec<u8> {
+        return self.data.clone();
+    }
+}
+
+pub struct Decoder<'a> {
+    index: usize,
+    length: usize,
+    data: &'a[u8],
+}
+
+impl<'a> Decoder<'a> {
+    pub fn new(data: &[u8]) -> Decoder {
         Decoder {
             index: 0,
             length: data.len(),
@@ -24,8 +119,8 @@ impl Decoder {
 
     pub fn uint16(&mut self) -> Result<u16, ()> {
         Ok(
-            (try!(self.uint8()) as u16) << 8
-          | (try!(self.uint8()) as u16)
+            (try!(self.uint8()) as u16) << 8 |
+            (try!(self.uint8()) as u16)
         )
     }
 
@@ -40,64 +135,28 @@ impl Decoder {
 
     pub fn int8(&mut self) -> Result<i8, ()> {
         let uint8 = try!(self.uint8());
-        if (uint8 | 0x80) == 0 {
-            return Ok(uint8 as i8);
-        } else {
-            return Ok(((uint8 - 0x81) as i8) - 0x7f);
-        }
+        Ok(unsafe { mem::transmute_copy(&uint8) })
     }
 
     pub fn int16(&mut self) -> Result<i16, ()> {
         let uint16 = try!(self.uint16());
-        if (uint16 | 0x80_00) == 0 {
-            return Ok(uint16 as i16);
-        } else {
-            return Ok(((uint16 - 0x81_00) as i16) - 0x7f_00);
-        }
+        Ok(unsafe { mem::transmute_copy(&uint16) })
     }
 
     pub fn int32(&mut self) -> Result<i32, ()> {
         let uint32 = try!(self.uint32());
-        if (uint32 | 0x80_00_00_00) == 0 {
-            return Ok(uint32 as i32);
-        } else {
-            return Ok(((uint32 - 0x81_00_00_00) as i32) - 0x7f_00_00_00);
-        }
+        Ok(unsafe { mem::transmute_copy(&uint32) })
     }
 
     pub fn float32(&mut self) -> Result<f32, ()> {
         let uint32 = try!(self.uint32());
-
-        let mut sign: f32 = (uint32 >> 31) as f32;
-        let exponent: f32 = (((uint32 << 1) >> 24) - 127) as f32;
-        let mut mantissa: f32 = ((uint32 << 9) >> 9) as f32;
-        mantissa = (mantissa / 8388608_f32 /* 2 ^ 23 */) + 1f32;
-
-        if sign == 0f32 {
-            sign = 1f32;
-        } else {
-            sign = -1f32;
-        }
-
-        Ok(sign * mantissa * 2f32.powf(exponent))
+        Ok(unsafe { mem::transmute_copy(&uint32) })
     }
 
     pub fn float64(&mut self) -> Result<f64, ()> {
         let uint64 = (try!(self.uint32()) as u64) << 32 |
                      (try!(self.uint32()) as u64);
-
-        let mut sign: f64 = (uint64 >> 63) as f64;
-        let exponent = (((uint64 << 1) >> 52) - 1023) as f64;
-        let mut mantissa = ((uint64 << 12) >> 12) as f64;
-        mantissa = (mantissa / 2251799813685248_f64 /* 2 ^ 51 */) + 1f64;
-
-        if sign == 0f64 {
-            sign = 1f64;
-        } else {
-            sign = -1f64;
-        }
-
-        Ok(sign * mantissa * 2f64.powf(exponent))
+        Ok(unsafe { mem::transmute_copy(&uint64) })
     }
 
     pub fn size(&mut self) -> Result<usize, ()> {
@@ -131,9 +190,7 @@ impl Decoder {
             return Err(());
         }
 
-        let slice = &self.data[self.index .. self.index + size];
-        let mut blob: Vec<u8> = Vec::new();
-        blob.extend_from_slice(slice);
+        let blob = self.data[self.index .. self.index + size].to_vec();
 
         self.index += size;
 
