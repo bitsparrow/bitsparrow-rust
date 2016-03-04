@@ -12,8 +12,6 @@ enum Chunk<'a> {
     Blob(&'a [u8]),
 }
 
-static MAX_SIZE: usize = 0x3FFFFFFF;
-
 impl<'a> Encoder<'a> {
     pub fn new() -> Encoder<'a> {
         Encoder {
@@ -64,7 +62,7 @@ impl<'a> Encoder<'a> {
     }
 
     pub fn size(&'a mut self, size: usize) -> &'a mut Encoder {
-        if size > MAX_SIZE {
+        if size > 0x3FFFFFFF {
             return self.uint32(0xFFFFFFFF);
         }
 
@@ -111,7 +109,7 @@ impl<'a> Encoder<'a> {
                     data.push(((uint32) & 0xFF) as u8);
                 },
                 &Chunk::Blob(blob) => {
-                    if blob.len() > MAX_SIZE {
+                    if blob.len() > 0x3FFFFFFF {
                         return Err(());
                     }
                     data.extend_from_slice(blob);
