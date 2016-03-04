@@ -1,63 +1,71 @@
 use std::mem;
 
-pub struct Encoder {
-    data: Vec<u8>,
+pub struct Encoder<'a> {
+    chunks: Vec<Chunk<'a>>,
+    capacity: usize,
 }
 
-impl Encoder {
-    pub fn new() -> Encoder {
+enum Chunk<'a> {
+    Uint8(u8),
+    Uint16(u16),
+    Uint32(u32),
+    Blob(&'a [u8]),
+}
+
+static MAX_SIZE: usize = 0x3FFFFFFF;
+
+impl<'a> Encoder<'a> {
+    pub fn new() -> Encoder<'a> {
         Encoder {
-            data: Vec::new(),
+            chunks: Vec::new(),
+            capacity: 0,
         }
     }
 
-    pub fn uint8(&mut self, uint8: u8) -> &mut Encoder {
-        self.data.push(uint8);
+    pub fn uint8(&'a mut self, uint8: u8) -> &'a mut Encoder {
+        self.chunks.push(Chunk::Uint8(uint8));
+        self.capacity += 1;
         return self;
     }
 
-    pub fn uint16(&mut self, uint16: u16) -> &mut Encoder {
-        self.data.reserve(2);
-        self.data.push((uint16 >> 8) as u8);
-        self.data.push((uint16 & 0xFF) as u8);
+    pub fn uint16(&'a mut self, uint16: u16) -> &'a mut Encoder {
+        self.chunks.push(Chunk::Uint16(uint16));
+        self.capacity += 2;
         return self;
     }
 
-    pub fn uint32(&mut self, uint32: u32) -> &mut Encoder {
-        self.data.reserve(4);
-        self.data.push((uint32 >> 24) as u8);
-        self.data.push(((uint32 >> 16) & 0xFF) as u8);
-        self.data.push(((uint32 >> 8) & 0xFF) as u8);
-        self.data.push((uint32 & 0xFF) as u8);
+    pub fn uint32(&'a mut self, uint32: u32) -> &'a mut Encoder {
+        self.chunks.push(Chunk::Uint32(uint32));
+        self.capacity += 4;
         return self;
     }
 
-    pub fn int8(&mut self, int8: i8) -> &mut Encoder {
+    pub fn int8(&'a mut self, int8: i8) -> &'a mut Encoder {
         self.uint8(unsafe { mem::transmute_copy(&int8) })
     }
 
-    pub fn int16(&mut self, int16: i16) -> &mut Encoder {
+    pub fn int16(&'a mut self, int16: i16) -> &'a mut Encoder {
         self.uint16(unsafe { mem::transmute_copy(&int16) })
     }
 
-    pub fn int32(&mut self, int32: i32) -> &mut Encoder {
+    pub fn int32(&'a mut self, int32: i32) -> &'a mut Encoder {
         self.uint32(unsafe { mem::transmute_copy(&int32) })
     }
 
-    pub fn float32(&mut self, float32: f32) -> &mut Encoder {
+    pub fn float32(&'a mut self, float32: f32) -> &'a mut Encoder {
         self.uint32(unsafe { mem::transmute_copy(&float32) })
     }
 
-    pub fn float64(&mut self, float64: f64) -> &mut Encoder {
+    pub fn float64(&'a mut self, float64: f64) -> &'a mut Encoder {
         let uint64: u64 = unsafe { mem::transmute_copy(&float64) };
         return self
             .uint32((uint64 >> 32) as u32)
             .uint32((uint64 & 0xFFFFFFFF) as u32);
     }
 
-    pub fn size(&mut self, size: usize) -> &mut Encoder {
-        if size > 0x3fffffff {
-            return self.uint32(0xffffffff);
+    pub fn size(&'a mut self, size: usize) -> &'a mut Encoder {
+        if size > MAX_SIZE {
+            return self.uint32(0xFFFFFFFF);
         }
 
         // can fit on 7 bits
@@ -71,25 +79,47 @@ impl Encoder {
         }
 
         // use up to 30 bits
-        return self.uint32((size as u32) | 0xc0000000);
+        return self.uint32((size as u32) | 0xC0000000);
     }
 
-    pub fn blob(&mut self, blob: &[u8]) -> &mut Encoder {
-        let mut size = blob.len();
-        if size > 0x3fffffff {
-            size = 0x3fffffff;
-        }
-        self.size(size);
-        self.data.extend_from_slice(&blob[..size]);
-        return self;
+    pub fn blob(&'a mut self, blob: &'a [u8]) -> &'a mut Encoder {
+        let size = blob.len();
+        let borrow = self.size(size);
+        borrow.capacity += size;
+        borrow.chunks.push(Chunk::Blob(blob));
+        return borrow;
     }
 
-    pub fn string(&mut self, string: &str) -> &mut Encoder {
+    pub fn string(&'a mut self, string: &'a str) -> &'a mut Encoder {
         self.blob(string.as_bytes())
     }
 
-    pub fn encode(&self) -> Vec<u8> {
-        return self.data.clone();
+    pub fn encode(&'a mut self) -> Result<Vec<u8>, ()> {
+        let mut data: Vec<u8> = Vec::with_capacity(self.capacity);
+
+        for chunk in self.chunks.iter() {
+            match chunk {
+                &Chunk::Uint8(uint8) => data.push(uint8),
+                &Chunk::Uint16(uint16) => {
+                    data.push((uint16 >> 8) as u8);
+                    data.push((uint16 & 0xFF) as u8);
+                },
+                &Chunk::Uint32(uint32) => {
+                    data.push(((uint32) >> 24) as u8);
+                    data.push((((uint32) >> 16) & 0xFF) as u8);
+                    data.push((((uint32) >> 8) & 0xFF) as u8);
+                    data.push(((uint32) & 0xFF) as u8);
+                },
+                &Chunk::Blob(blob) => {
+                    if blob.len() > MAX_SIZE {
+                        return Err(());
+                    }
+                    data.extend_from_slice(blob);
+                }
+            }
+        }
+
+        Ok(data)
     }
 }
 

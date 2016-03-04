@@ -98,7 +98,8 @@ fn eat_own_dog_food() {
         .size(1073741823)
         .float32(PI as f32)
         .float64(PI)
-        .encode();
+        .encode()
+        .unwrap();
 
     assert_eq!(buffer, expected);
 
