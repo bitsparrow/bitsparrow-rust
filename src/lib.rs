@@ -94,7 +94,7 @@ impl<'a> Encoder<'a> {
         self.blob(string.as_bytes())
     }
 
-    pub fn encode(&'a mut self) -> Result<Vec<u8>, ()> {
+    pub fn encode(&'a self) -> Result<Vec<u8>, ()> {
         let mut data: Vec<u8> = Vec::with_capacity(self.capacity);
 
         for chunk in self.chunks.iter() {
