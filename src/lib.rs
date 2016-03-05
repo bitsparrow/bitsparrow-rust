@@ -63,6 +63,7 @@ enum Chunk<'a> {
     Uint16(u16),
     Uint32(u32),
     Blob(&'a [u8]),
+    Error(&'a str),
 }
 
 impl<'a> Encoder<'a> {
@@ -114,35 +115,68 @@ impl<'a> Encoder<'a> {
             .uint32((uint64 & 0xFFFFFFFF) as u32);
     }
 
-    pub fn size(&'a mut self, size: usize) -> &'a mut Encoder {
-        if size > 0x3FFFFFFF {
-            return self.uint32(0xFFFFFFFF);
+    pub fn uadapt(&'a mut self, uadapt: usize) -> &'a mut Encoder {
+        if uadapt > 0x3FFFFFFF {
+            self.chunks.push(Chunk::Error("The value for [uadapt] type is out of range!"));
+            return self;
         }
 
         // can fit on 7 bits
-        if size < 0x80 {
-            return self.uint8(size as u8);
+        if uadapt < 0x80 {
+            return self.uint8(uadapt as u8);
         }
 
         // can fit on 14 bits
-        if size < 0x4000 {
-            return self.uint16((size as u16) | 0x8000);
+        if uadapt < 0x4000 {
+            return self.uint16((uadapt as u16) | 0x8000);
         }
 
         // use up to 30 bits
-        return self.uint32((size as u32) | 0xC0000000);
+        self.uint32((uadapt as u32) | 0xC0000000)
+    }
+
+    pub fn adapt(&'a mut self, adapt: isize) -> &'a mut Encoder {
+        let sign = if adapt < 0 { 1 } else { 0 };
+        let range = isize::abs(adapt) - sign;
+        if range > 0x1FFFFFFF {
+            self.chunks.push(Chunk::Error("[adapt] value is out of range!"));
+            return self;
+        }
+
+        // can fit on 7 bits
+        if range < 0x40 {
+            return self.uint8((range as u8) ^ (0x7F * sign as u8));
+        }
+
+        // can fit on 14 bits
+        if range < 0x2000 {
+            return self.uint16((range as u16) ^ (0xBFFF * sign as u16));
+        }
+
+        // use up to 30 bits
+        self.uint32((adapt as u32) ^ (0xFFFFFFFF * sign as u32))
     }
 
     pub fn blob(&'a mut self, blob: &'a [u8]) -> &'a mut Encoder {
         let size = blob.len();
-        let borrow = self.size(size);
-        borrow.capacity += size;
-        borrow.chunks.push(Chunk::Blob(blob));
-        return borrow;
+        if size > 0x3FFFFFFF {
+            self.chunks.push(Chunk::Error("[blob] value is too long!"));
+            return self;
+        }
+        let sref = self.uadapt(size);
+        sref.capacity += size;
+        sref.chunks.push(Chunk::Blob(blob));
+        return sref;
     }
 
     pub fn string(&'a mut self, string: &'a str) -> &'a mut Encoder {
-        self.blob(string.as_bytes())
+        let blob = string.as_bytes();
+        let size = blob.len();
+        if size > 0x3FFFFFFF {
+            self.chunks.push(Chunk::Error("[string] value is too long!"));
+            return self;
+        }
+        self.blob(blob)
     }
 
     pub fn encode(&'a self) -> Result<Vec<u8>, EncodingError> {
@@ -161,12 +195,8 @@ impl<'a> Encoder<'a> {
                     data.push((((uint32) >> 8) & 0xFF) as u8);
                     data.push(((uint32) & 0xFF) as u8);
                 },
-                &Chunk::Blob(blob) => {
-                    if blob.len() > 0x3FFFFFFF {
-                        return Err(EncodingError("Trying to encode too long data"));
-                    }
-                    data.extend_from_slice(blob);
-                }
+                &Chunk::Blob(blob) => data.extend_from_slice(blob),
+                &Chunk::Error(error) => return Err(EncodingError(error)),
             }
         }
 
@@ -240,33 +270,57 @@ impl<'a> Decoder<'a> {
         Ok(unsafe { mem::transmute_copy(&uint64) })
     }
 
-    pub fn size(&mut self) -> Result<usize, ReadError> {
-        let mut size: usize = try!(self.uint8()) as usize;
+    pub fn uadapt(&mut self) -> Result<usize, ReadError> {
+        let mut uadapt: usize = try!(self.uint8()) as usize;
 
         // 1 byte (no signature)
-        if (size & 128) == 0 {
-            return Ok(size);
+        if (uadapt & 0x80) == 0 {
+            return Ok(uadapt);
         }
 
-        let sig: u8 = (size as u8) >> 6;
+        let sig: u8 = (uadapt as u8) >> 6;
         // remove signature from the first byte
-        size = size & 63 /* 00111111 */;
+        uadapt &= 0x3F /* 00111111 */;
 
         // 2 bytes (signature is 10)
         if sig == 2 {
-            return Ok(size << 8 | try!(self.uint8()) as usize);
+            return Ok(uadapt << 8 | try!(self.uint8()) as usize);
         }
 
         Ok(
-            size << 24                          |
+            uadapt << 24                        |
             (try!(self.uint8()) as usize) << 16 |
             (try!(self.uint8()) as usize) << 8  |
             (try!(self.uint8()) as usize)
         )
     }
 
+    pub fn adapt(&mut self) -> Result<isize, ReadError> {
+        if self.index >= self.length {
+            return Err(ReadError);
+        }
+        let sig = (self.data[self.index] >> 5) as isize;
+        let uadapt = try!(self.uadapt());
+        let sign: isize = if (sig & 0b100) == 0 { (sig & 0b010) >> 1 } else { sig & 0b001 };
+        
+        let mut adapt = uadapt as isize;
+        if sign == 1 {
+            let mask: isize = if (sig & 0b100) == 0 {
+                0x7F
+            } else if (sig & 0b010) == 0 {
+                0xBFFF
+            } else {
+                0xFFFFFFFF
+            };
+            adapt ^= mask * sign;
+            adapt *= -1;
+            adapt -= 1;
+        }
+        Ok(adapt)
+    }
+
     pub fn blob(&mut self) -> Result<Vec<u8>, ReadError> {
-        let size = try!(self.size());
+        let size = try!(self.uadapt());
         if self.index + size >= self.length {
             return Err(ReadError);
         }

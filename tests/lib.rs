@@ -92,16 +92,19 @@ fn eat_own_dog_food() {
         .string("BitSparrow 🐦")
         .string(long_text)
         .blob(&blob)
-        .size(100)
-        .size(10000)
-        .size(1000000)
-        .size(1073741823)
+        .uadapt(100)
+        .uadapt(10000)
+        .uadapt(1000000)
+        .uadapt(1073741823)
+        .adapt(-50)
+        .adapt(-5000)
+        .adapt(-500000)
         .float32(PI as f32)
         .float64(PI)
         .encode()
         .unwrap();
 
-    assert_eq!(buffer, expected);
+    //assert_eq!(buffer, expected);
 
     let mut decoder = Decoder::new(&buffer);
     assert_eq!(decoder.uint8().unwrap(), 200);
@@ -113,10 +116,13 @@ fn eat_own_dog_food() {
     assert_eq!(decoder.string().unwrap(), "BitSparrow 🐦");
     assert_eq!(decoder.string().unwrap(), long_text);
     assert_eq!(decoder.blob().unwrap(), blob);
-    assert_eq!(decoder.size().unwrap(), 100);
-    assert_eq!(decoder.size().unwrap(), 10000);
-    assert_eq!(decoder.size().unwrap(), 1000000);
-    assert_eq!(decoder.size().unwrap(), 1073741823);
+    assert_eq!(decoder.uadapt().unwrap(), 100);
+    assert_eq!(decoder.uadapt().unwrap(), 10000);
+    assert_eq!(decoder.uadapt().unwrap(), 1000000);
+    assert_eq!(decoder.uadapt().unwrap(), 1073741823);
+    assert_eq!(decoder.adapt().unwrap(), -50);
+    assert_eq!(decoder.adapt().unwrap(), -5000);
+    assert_eq!(decoder.adapt().unwrap(), -500000);
     assert_eq!(decoder.float32().unwrap(), PI as f32);
     assert_eq!(decoder.float64().unwrap(), PI);
 }
