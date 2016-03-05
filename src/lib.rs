@@ -1,4 +1,57 @@
 use std::mem;
+use std::fmt;
+use std::error::Error;
+
+///
+/// # ReadError
+///
+/// Returned by the Decoder on failed attempts to read
+/// outside of the buffer size.
+///
+pub struct ReadError;
+
+impl Error for ReadError {
+    fn description(&self) -> &str {
+        return "Failed to read ouf of the buffer";
+    }
+}
+
+impl fmt::Display for ReadError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.description())
+    }
+}
+
+impl fmt::Debug for ReadError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.description())
+    }
+}
+
+///
+/// #EncodingError
+///
+/// Returned by the Encoder when a value fails to encode.
+///
+pub struct EncodingError<'a>(&'a str);
+
+impl<'a> Error for EncodingError<'a> {
+    fn description(&self) -> &str {
+        return self.0;
+    }
+}
+
+impl<'a> fmt::Display for EncodingError<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.description())
+    }
+}
+
+impl<'a> fmt::Debug for EncodingError<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.description())
+    }
+}
 
 pub struct Encoder<'a> {
     chunks: Vec<Chunk<'a>>,
@@ -92,7 +145,7 @@ impl<'a> Encoder<'a> {
         self.blob(string.as_bytes())
     }
 
-    pub fn encode(&'a self) -> Result<Vec<u8>, ()> {
+    pub fn encode(&'a self) -> Result<Vec<u8>, EncodingError> {
         let mut data: Vec<u8> = Vec::with_capacity(self.capacity);
 
         for chunk in self.chunks.iter() {
@@ -110,7 +163,7 @@ impl<'a> Encoder<'a> {
                 },
                 &Chunk::Blob(blob) => {
                     if blob.len() > 0x3FFFFFFF {
-                        return Err(());
+                        return Err(EncodingError("Trying to encode too long data"));
                     }
                     data.extend_from_slice(blob);
                 }
@@ -136,23 +189,23 @@ impl<'a> Decoder<'a> {
         }
     }
 
-    pub fn uint8(&mut self) -> Result<u8, ()> {
+    pub fn uint8(&mut self) -> Result<u8, ReadError> {
         if self.index >= self.length {
-            return Err(());
+            return Err(ReadError);
         }
         let uint8 = self.data[self.index];
         self.index += 1;
         return Ok(uint8);
     }
 
-    pub fn uint16(&mut self) -> Result<u16, ()> {
+    pub fn uint16(&mut self) -> Result<u16, ReadError> {
         Ok(
             (try!(self.uint8()) as u16) << 8 |
             (try!(self.uint8()) as u16)
         )
     }
 
-    pub fn uint32(&mut self) -> Result<u32, ()> {
+    pub fn uint32(&mut self) -> Result<u32, ReadError> {
         Ok(
             (try!(self.uint8()) as u32) << 24 |
             (try!(self.uint8()) as u32) << 16 |
@@ -161,33 +214,33 @@ impl<'a> Decoder<'a> {
         )
     }
 
-    pub fn int8(&mut self) -> Result<i8, ()> {
+    pub fn int8(&mut self) -> Result<i8, ReadError> {
         let uint8 = try!(self.uint8());
         Ok(unsafe { mem::transmute_copy(&uint8) })
     }
 
-    pub fn int16(&mut self) -> Result<i16, ()> {
+    pub fn int16(&mut self) -> Result<i16, ReadError> {
         let uint16 = try!(self.uint16());
         Ok(unsafe { mem::transmute_copy(&uint16) })
     }
 
-    pub fn int32(&mut self) -> Result<i32, ()> {
+    pub fn int32(&mut self) -> Result<i32, ReadError> {
         let uint32 = try!(self.uint32());
         Ok(unsafe { mem::transmute_copy(&uint32) })
     }
 
-    pub fn float32(&mut self) -> Result<f32, ()> {
+    pub fn float32(&mut self) -> Result<f32, ReadError> {
         let uint32 = try!(self.uint32());
         Ok(unsafe { mem::transmute_copy(&uint32) })
     }
 
-    pub fn float64(&mut self) -> Result<f64, ()> {
+    pub fn float64(&mut self) -> Result<f64, ReadError> {
         let uint64 = (try!(self.uint32()) as u64) << 32 |
                      (try!(self.uint32()) as u64);
         Ok(unsafe { mem::transmute_copy(&uint64) })
     }
 
-    pub fn size(&mut self) -> Result<usize, ()> {
+    pub fn size(&mut self) -> Result<usize, ReadError> {
         let mut size: usize = try!(self.uint8()) as usize;
 
         // 1 byte (no signature)
@@ -212,10 +265,10 @@ impl<'a> Decoder<'a> {
         )
     }
 
-    pub fn blob(&mut self) -> Result<Vec<u8>, ()> {
+    pub fn blob(&mut self) -> Result<Vec<u8>, ReadError> {
         let size = try!(self.size());
         if self.index + size >= self.length {
-            return Err(());
+            return Err(ReadError);
         }
 
         let blob = self.data[self.index .. self.index + size].to_vec();
@@ -225,11 +278,11 @@ impl<'a> Decoder<'a> {
         return Ok(blob);
     }
 
-    pub fn string(&mut self) -> Result<String, ()> {
+    pub fn string(&mut self) -> Result<String, ReadError> {
         let blob = try!(self.blob());
         return match String::from_utf8(blob) {
             Ok(string) => Ok(string),
-            Err(_) => Err(()),
+            Err(_) => Err(ReadError),
         }
     }
 }
