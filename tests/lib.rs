@@ -127,13 +127,29 @@ fn stacking_bools() {
         .bool(true)
         .bool(false)
         .bool(true)
+        .bool(false)
+        .bool(false)
+        .bool(false)
+        .bool(true)
+        .bool(true)
+        .bool(false)
+        .uint8(10)
+        .bool(true)
         .encode()
         .unwrap();
 
-    assert_eq!(buffer.len(), 1);
+    assert_eq!(buffer.len(), 4);
 
     let mut decoder = Decoder::new(&buffer);
     assert_eq!(decoder.bool().unwrap(), true);
     assert_eq!(decoder.bool().unwrap(), false);
+    assert_eq!(decoder.bool().unwrap(), true);
+    assert_eq!(decoder.bool().unwrap(), false);
+    assert_eq!(decoder.bool().unwrap(), false);
+    assert_eq!(decoder.bool().unwrap(), false);
+    assert_eq!(decoder.bool().unwrap(), true);
+    assert_eq!(decoder.bool().unwrap(), true);
+    assert_eq!(decoder.bool().unwrap(), false);
+    assert_eq!(decoder.uint8().unwrap(), 10);
     assert_eq!(decoder.bool().unwrap(), true);
 }
