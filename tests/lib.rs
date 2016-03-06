@@ -120,3 +120,20 @@ fn eat_own_dog_food() {
     assert_eq!(decoder.float32().unwrap(), PI as f32);
     assert_eq!(decoder.float64().unwrap(), PI);
 }
+
+#[test]
+fn stacking_bools() {
+    let buffer = Encoder::new()
+        .bool(true)
+        .bool(false)
+        .bool(true)
+        .encode()
+        .unwrap();
+
+    assert_eq!(buffer.len(), 1);
+
+    let mut decoder = Decoder::new(&buffer);
+    assert_eq!(decoder.bool().unwrap(), true);
+    assert_eq!(decoder.bool().unwrap(), false);
+    assert_eq!(decoder.bool().unwrap(), true);
+}

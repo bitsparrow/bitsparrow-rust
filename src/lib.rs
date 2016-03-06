@@ -34,6 +34,7 @@ pub struct Encoder<'a> {
 }
 
 enum Chunk<'a> {
+    Bool(u8, u8),
     Uint8(u8),
     Uint16(u16),
     Uint32(u32),
@@ -90,6 +91,32 @@ impl<'a> Encoder<'a> {
             .uint32((uint64 & 0xFFFFFFFF) as u32);
     }
 
+    pub fn bool(&'a mut self, bool: bool) -> &'a mut Encoder {
+        let bool_bit: u8 = if bool { 1 } else { 0 };
+        if self.chunks.is_empty() {
+            self.chunks.push(Chunk::Bool(bool_bit, 0));
+            return self;
+        }
+
+        let last_chunk = self.chunks.pop().unwrap();
+        match last_chunk {
+            Chunk::Bool(bits, shift) => {
+                if shift < 7 {
+                    let nshift = shift + 1;
+                    self.chunks.push(Chunk::Bool(bits | (bool_bit << nshift), nshift));
+                    return self;
+                }
+                // restore last chunk
+                self.chunks.push(last_chunk);
+            },
+            // restore last chunk
+            _ => self.chunks.push(last_chunk),
+        }
+
+        self.chunks.push(Chunk::Bool(bool_bit, 0));
+        return self;
+    }
+
     pub fn size(&'a mut self, size: usize) -> &'a mut Encoder {
         if size > 0x3FFFFFFF {
             self.chunks.push(Chunk::Error("[size] value is too large"));
@@ -130,6 +157,7 @@ impl<'a> Encoder<'a> {
 
         for chunk in self.chunks.iter() {
             match chunk {
+                &Chunk::Bool(bits, _) => data.push(bits),
                 &Chunk::Uint8(uint8) => data.push(uint8),
                 &Chunk::Uint16(uint16) => {
                     data.push((uint16 >> 8) as u8);
@@ -154,6 +182,8 @@ pub struct Decoder<'a> {
     index: usize,
     length: usize,
     data: &'a[u8],
+    bool_index: usize,
+    bool_shift: u8,
 }
 
 impl<'a> Decoder<'a> {
@@ -162,6 +192,8 @@ impl<'a> Decoder<'a> {
             index: 0,
             length: data.len(),
             data: data,
+            bool_index: std::usize::MAX,
+            bool_shift: 0,
         }
     }
 
@@ -214,6 +246,19 @@ impl<'a> Decoder<'a> {
         let uint64 = (try!(self.uint32()) as u64) << 32 |
                      (try!(self.uint32()) as u64);
         Ok(unsafe { mem::transmute_copy(&uint64) })
+    }
+
+    pub fn bool(&mut self) -> Result<bool, Error<'a>> {
+        if self.bool_index == self.index && self.bool_shift < 7 {
+            self.bool_shift += 1;
+            let bits = self.data[self.index - 1];
+            let bool_bit = 1 << self.bool_shift;
+            return Ok(bits & bool_bit == bool_bit);
+        }
+        let bits = try!(self.uint8());
+        self.bool_index = self.index;
+        self.bool_shift = 0;
+        return Ok(bits & 1 == 1);
     }
 
     pub fn size(&mut self) -> Result<usize, Error<'a>> {
