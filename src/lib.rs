@@ -8,21 +8,25 @@ use std::error;
 /// Returned by the Encoder when a value fails to encode.
 ///
 #[derive(Debug)]
-pub struct Error<'a>(&'a str);
+pub struct Error(String);
 
-impl<'a> Error<'a> {
-  pub fn out_of_bounds() -> Self {
-    Error("Attempted to read out of bounds")
+impl Error {
+  pub fn new(msg: &str) -> Error {
+    Error(msg.to_string())
+  }
+
+  pub fn out_of_bounds() -> Error {
+    Error::new("Attempted to read out of bounds")
   }
 }
 
-impl<'a> error::Error for Error<'a> {
+impl error::Error for Error {
   fn description(&self) -> &str {
-    return self.0;
+    return &self.0;
   }
 }
 
-impl<'a> fmt::Display for Error<'a> {
+impl fmt::Display for Error {
   fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
     write!(f, "{}", self.0)
   }
@@ -142,16 +146,16 @@ impl Encoder {
   }
 }
 
-pub struct Decoder<'a> {
+pub struct Decoder {
   index: usize,
   length: usize,
-  data: &'a[u8],
+  data: Vec<u8>,
   bool_index: usize,
   bool_shift: u8,
 }
 
-impl<'a> Decoder<'a> {
-  pub fn new(data: &[u8]) -> Decoder {
+impl Decoder {
+  pub fn new(data: Vec<u8>) -> Decoder {
     Decoder {
       index: 0,
       length: data.len(),
@@ -161,7 +165,7 @@ impl<'a> Decoder<'a> {
     }
   }
 
-  pub fn uint8(&mut self) -> Result<u8, Error<'a>> {
+  pub fn uint8(&mut self) -> Result<u8, Error> {
     if self.index >= self.length {
       return Err(Error::out_of_bounds());
     }
@@ -170,14 +174,14 @@ impl<'a> Decoder<'a> {
     return Ok(uint8);
   }
 
-  pub fn uint16(&mut self) -> Result<u16, Error<'a>> {
+  pub fn uint16(&mut self) -> Result<u16, Error> {
     Ok(
       (try!(self.uint8()) as u16) << 8 |
       (try!(self.uint8()) as u16)
     )
   }
 
-  pub fn uint32(&mut self) -> Result<u32, Error<'a>> {
+  pub fn uint32(&mut self) -> Result<u32, Error> {
     Ok(
       (try!(self.uint8()) as u32) << 24 |
       (try!(self.uint8()) as u32) << 16 |
@@ -186,33 +190,33 @@ impl<'a> Decoder<'a> {
     )
   }
 
-  pub fn int8(&mut self) -> Result<i8, Error<'a>> {
+  pub fn int8(&mut self) -> Result<i8, Error> {
     let uint8 = try!(self.uint8());
     Ok(unsafe { mem::transmute_copy(&uint8) })
   }
 
-  pub fn int16(&mut self) -> Result<i16, Error<'a>> {
+  pub fn int16(&mut self) -> Result<i16, Error> {
     let uint16 = try!(self.uint16());
     Ok(unsafe { mem::transmute_copy(&uint16) })
   }
 
-  pub fn int32(&mut self) -> Result<i32, Error<'a>> {
+  pub fn int32(&mut self) -> Result<i32, Error> {
     let uint32 = try!(self.uint32());
     Ok(unsafe { mem::transmute_copy(&uint32) })
   }
 
-  pub fn float32(&mut self) -> Result<f32, Error<'a>> {
+  pub fn float32(&mut self) -> Result<f32, Error> {
     let uint32 = try!(self.uint32());
     Ok(unsafe { mem::transmute_copy(&uint32) })
   }
 
-  pub fn float64(&mut self) -> Result<f64, Error<'a>> {
+  pub fn float64(&mut self) -> Result<f64, Error> {
     let uint64 = (try!(self.uint32()) as u64) << 32 |
                  (try!(self.uint32()) as u64);
     Ok(unsafe { mem::transmute_copy(&uint64) })
   }
 
-  pub fn bool(&mut self) -> Result<bool, Error<'a>> {
+  pub fn bool(&mut self) -> Result<bool, Error> {
     if self.bool_index == self.index && self.bool_shift < 7 {
       self.bool_shift += 1;
       let bits = self.data[self.index - 1];
@@ -225,7 +229,7 @@ impl<'a> Decoder<'a> {
     return Ok(bits & 1 == 1);
   }
 
-  pub fn size(&mut self) -> Result<usize, Error<'a>> {
+  pub fn size(&mut self) -> Result<usize, Error> {
     let mut size: usize = try!(self.uint8()) as usize;
 
     // 1 byte (no signature)
@@ -250,7 +254,7 @@ impl<'a> Decoder<'a> {
     )
   }
 
-  pub fn blob(&mut self) -> Result<Vec<u8>, Error<'a>> {
+  pub fn blob(&mut self) -> Result<Vec<u8>, Error> {
     let size = try!(self.size());
     if self.index + size >= self.length {
       return Err(Error::out_of_bounds());
@@ -263,11 +267,11 @@ impl<'a> Decoder<'a> {
     return Ok(blob);
   }
 
-  pub fn string(&mut self) -> Result<String, Error<'a>> {
+  pub fn string(&mut self) -> Result<String, Error> {
     let blob = try!(self.blob());
     return match String::from_utf8(blob) {
       Ok(string) => Ok(string),
-      Err(_) => Err(Error("Couldn't decode UTF-8 string")),
+      Err(_) => Err(Error::new("Couldn't decode UTF-8 string")),
     }
   }
 }
