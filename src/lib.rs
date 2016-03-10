@@ -36,6 +36,7 @@ pub struct Encoder {
   data: Vec<u8>,
   bool_index: usize,
   bool_shift: u8,
+  last_error: Option<Error>,
 }
 
 impl Encoder {
@@ -44,6 +45,7 @@ impl Encoder {
       data: Vec::new(),
       bool_index: std::usize::MAX,
       bool_shift: 0,
+      last_error: None,
     }
   }
 
@@ -97,8 +99,7 @@ impl Encoder {
 
     if self.bool_index == index && self.bool_shift < 7 {
       self.bool_shift += 1;
-      let bits: u8 = self.data[index - 1] | bool_bit << self.bool_shift;
-      self.data[index - 1] = bits;
+      self.data[index - 1] = self.data[index - 1] | bool_bit << self.bool_shift;
       return self;
     }
 
@@ -107,9 +108,10 @@ impl Encoder {
     self.uint8(bool_bit)
   }
 
-  pub fn size(self, size: usize) -> Encoder {
+  pub fn size(mut self, size: usize) -> Encoder {
     if size > 0x3FFFFFFF {
-      return self.uint32(0xFFFFFFFF);
+      self.last_error = Some(Error::new("[size] value is too large"));
+      return self;
     }
 
     // can fit on 7 bits
@@ -126,10 +128,10 @@ impl Encoder {
     return self.uint32((size as u32) | 0xC0000000);
   }
 
-  pub fn blob(self, blob: &[u8]) -> Encoder {
+  pub fn blob(mut self, blob: &[u8]) -> Encoder {
     let size = blob.len();
     if size > 0x3FFFFFFF {
-    //   self.chunks.push(Chunk::Error("[blob] value is too long"));
+      self.last_error = Some(Error::new("[blob] is too long"));
       return self;
     }
     let mut sref = self.size(size);
@@ -137,12 +139,22 @@ impl Encoder {
     return sref;
   }
 
-  pub fn string(self, string: &str) -> Encoder {
-    self.blob(string.as_bytes())
+  pub fn string(mut self, string: &str) -> Encoder {
+    let size = string.len();
+    if size > 0x3FFFFFFF {
+      self.last_error = Some(Error::new("[string] is too long"));
+      return self;
+    }
+    let mut sref = self.size(size);
+    sref.data.extend_from_slice(string.as_bytes());
+    return sref;
   }
 
-  pub fn encode(self) -> Result<Vec<u8>, ()> {
-    Ok(self.data)
+  pub fn encode(self) -> Result<Vec<u8>, Error> {
+    match self.last_error {
+      Some(error) => Err(error),
+      None        => Ok(self.data),
+    }
   }
 }
 
