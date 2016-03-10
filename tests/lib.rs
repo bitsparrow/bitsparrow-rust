@@ -103,7 +103,7 @@ fn eat_own_dog_food() {
 
   assert_eq!(buffer, expected);
 
-  let mut decoder = Decoder::new(&buffer);
+  let mut decoder = Decoder::new(buffer);
   assert_eq!(decoder.uint8().unwrap(), 200);
   assert_eq!(decoder.uint16().unwrap(), 9001);
   assert_eq!(decoder.uint32().unwrap(), 1234567890);
@@ -140,7 +140,7 @@ fn stacking_bools() {
 
   assert_eq!(buffer.len(), 4);
 
-  let mut decoder = Decoder::new(&buffer);
+  let mut decoder = Decoder::new(buffer);
   assert_eq!(decoder.bool().unwrap(), true);
   assert_eq!(decoder.bool().unwrap(), false);
   assert_eq!(decoder.bool().unwrap(), true);
