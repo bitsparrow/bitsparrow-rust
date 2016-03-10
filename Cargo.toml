@@ -2,3 +2,6 @@
 name = "bitsparrow"
 version = "0.2.0"
 authors = ["maciej.hirsz@gmail.com"]
+description = "BitSparrow implementation in Rust"
+homepage = "http://bitsparrow.io/"
+license = "MIT"
