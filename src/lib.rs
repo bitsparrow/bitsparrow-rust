@@ -268,7 +268,7 @@ impl Decoder {
 
   pub fn blob(&mut self) -> Result<Vec<u8>, Error> {
     let size = try!(self.size());
-    if self.index + size >= self.length {
+    if self.index + size > self.length {
       return Err(Error::out_of_bounds());
     }
 

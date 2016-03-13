@@ -153,3 +153,11 @@ fn stacking_bools() {
   assert_eq!(decoder.uint8().unwrap(), 10);
   assert_eq!(decoder.bool().unwrap(), true);
 }
+
+#[test]
+fn string_in_bounds() {
+  let buffer = Encoder::new().string("Some string").encode().unwrap();
+  let string = Decoder::new(buffer).string().unwrap();
+
+  assert_eq!(string, "Some string");
+}
