@@ -128,14 +128,14 @@ impl Encoder {
     return self.uint32((size as u32) | 0xC0000000);
   }
 
-  pub fn blob(mut self, blob: &[u8]) -> Encoder {
-    let size = blob.len();
+  pub fn bytes(mut self, bytes: &[u8]) -> Encoder {
+    let size = bytes.len();
     if size > 0x3FFFFFFF {
-      self.last_error = Some(Error::new("[blob] is too long"));
+      self.last_error = Some(Error::new("[bytes] is too long"));
       return self;
     }
     let mut sref = self.size(size);
-    sref.data.extend_from_slice(blob);
+    sref.data.extend_from_slice(bytes);
     return sref;
   }
 
@@ -150,7 +150,7 @@ impl Encoder {
     return sref;
   }
 
-  pub fn encode(self) -> Result<Vec<u8>, Error> {
+  pub fn end(self) -> Result<Vec<u8>, Error> {
     match self.last_error {
       Some(error) => Err(error),
       None        => Ok(self.data),
@@ -266,24 +266,28 @@ impl Decoder {
     )
   }
 
-  pub fn blob(&mut self) -> Result<Vec<u8>, Error> {
+  pub fn bytes(&mut self) -> Result<Vec<u8>, Error> {
     let size = try!(self.size());
     if self.index + size > self.length {
       return Err(Error::out_of_bounds());
     }
 
-    let blob = self.data[self.index .. self.index + size].to_vec();
+    let bytes = self.data[self.index .. self.index + size].to_vec();
 
     self.index += size;
 
-    return Ok(blob);
+    return Ok(bytes);
   }
 
   pub fn string(&mut self) -> Result<String, Error> {
-    let blob = try!(self.blob());
-    return match String::from_utf8(blob) {
+    let bytes = try!(self.bytes());
+    return match String::from_utf8(bytes) {
       Ok(string) => Ok(string),
       Err(_) => Err(Error::new("Couldn't decode UTF-8 string")),
     }
+  }
+
+  pub fn end(&self) -> bool {
+    self.index >= self.length
   }
 }

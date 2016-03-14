@@ -80,7 +80,7 @@ fn eat_own_dog_food() {
     0x40,0x49,0x0f,0xdb,0x40,0x09,0x21,0xfb,0x54,0x44,0x2d,0x18
   ];
   let long_text = "Sparrow /ˈsper.oʊ/\n\nUnder the classification used in the Handbook of the Birds of the World (HBW) main groupings of the sparrows are the true sparrows (genus Passer), the snowfinches (typically one genus, Montifringilla), and the rock sparrows (Petronia and the pale rockfinch). These groups are similar to each other, and are each fairly homogeneous, especially Passer.[4] Some classifications also include the sparrow-weavers (Plocepasser) and several other African genera (otherwise classified among the weavers, Ploceidae)[4] which are morphologically similar to Passer.[5] According to a study of molecular and skeletal evidence by Jon Fjeldså and colleagues, the cinnamon ibon of the Philippines, previously considered to be a white-eye, is a sister taxon to the sparrows as defined by the HBW. They therefore classify it as its own subfamily within Passeridae.[5]";
-  let blob = [1,2,3,4,5,6];
+  let bytes = [1,2,3,4,5,6];
 
   let buffer = Encoder::new()
     .uint8(200)
@@ -91,14 +91,14 @@ fn eat_own_dog_food() {
     .int32(-1234567890)
     .string("BitSparrow 🐦")
     .string(long_text)
-    .blob(&blob)
+    .bytes(&bytes)
     .size(100)
     .size(10000)
     .size(1000000)
     .size(1073741823)
     .float32(PI as f32)
     .float64(PI)
-    .encode()
+    .end()
     .unwrap();
 
   assert_eq!(buffer, expected);
@@ -112,13 +112,14 @@ fn eat_own_dog_food() {
   assert_eq!(decoder.int32().unwrap(), -1234567890);
   assert_eq!(decoder.string().unwrap(), "BitSparrow 🐦");
   assert_eq!(decoder.string().unwrap(), long_text);
-  assert_eq!(decoder.blob().unwrap(), blob);
+  assert_eq!(decoder.bytes().unwrap(), bytes);
   assert_eq!(decoder.size().unwrap(), 100);
   assert_eq!(decoder.size().unwrap(), 10000);
   assert_eq!(decoder.size().unwrap(), 1000000);
   assert_eq!(decoder.size().unwrap(), 1073741823);
   assert_eq!(decoder.float32().unwrap(), PI as f32);
   assert_eq!(decoder.float64().unwrap(), PI);
+  assert_eq!(decoder.end(), true);
 }
 
 #[test]
@@ -135,7 +136,7 @@ fn stacking_bools() {
     .bool(false)
     .uint8(10)
     .bool(true)
-    .encode()
+    .end()
     .unwrap();
 
   assert_eq!(buffer.len(), 4);
@@ -152,12 +153,14 @@ fn stacking_bools() {
   assert_eq!(decoder.bool().unwrap(), false);
   assert_eq!(decoder.uint8().unwrap(), 10);
   assert_eq!(decoder.bool().unwrap(), true);
+  assert_eq!(decoder.end(), true);
 }
 
 #[test]
 fn string_in_bounds() {
-  let buffer = Encoder::new().string("Some string").encode().unwrap();
-  let string = Decoder::new(buffer).string().unwrap();
+  let buffer = Encoder::new().string("Some string").end().unwrap();
+  let mut decoder = Decoder::new(buffer);
 
-  assert_eq!(string, "Some string");
+  assert_eq!(decoder.string().unwrap(), "Some string");
+  assert_eq!(decoder.end(), true);
 }
