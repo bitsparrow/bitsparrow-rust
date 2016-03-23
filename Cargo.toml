@@ -4,4 +4,6 @@ version = "0.3.2"
 authors = ["maciej.hirsz@gmail.com"]
 description = "BitSparrow implementation in Rust"
 homepage = "http://bitsparrow.io/"
+documentation = "http://bitsparrow.io/doc/bitsparrow/"
+repository = "https://github.com/bitsparrow/bitsparrow-rust"
 license = "MIT"
