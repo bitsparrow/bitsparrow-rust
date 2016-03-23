@@ -3,10 +3,6 @@
 //!
 //! # BitSparrow in Rust
 //!
-//!
-//! Encoder takes typed data in order and produces a binary
-//! buffer represented as a `Vec<u8>`.
-//!
 //! ## Encoding
 //!
 //! ```

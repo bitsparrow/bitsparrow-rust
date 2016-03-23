@@ -1,15 +1,6 @@
 # BitSparrow in Rust
 
-[Homepage](http://bitsparrow.io/) - [API Documentation](http://bitsparrow.io/doc/bitsparrow/)
-
-For implementations in other languages, and more detailed
-information on the types check out http://bitsparrow.io/.
-
-# BitSparrow in Rust
-
-
-Encoder takes typed data in order and produces a binary
-buffer represented as a `Vec<u8>`.
+**[Homepage](http://bitsparrow.io/) - [API Documentation](http://bitsparrow.io/doc/bitsparrow/)**
 
 ## Encoding
 
