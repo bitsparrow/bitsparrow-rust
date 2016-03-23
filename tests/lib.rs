@@ -103,7 +103,7 @@ fn eat_own_dog_food() {
 
     assert_eq!(buffer, expected);
 
-    let decoder = Decoder::new(buffer);
+    let mut decoder = Decoder::new(buffer);
     assert_eq!(decoder.uint8().unwrap(), 200);
     assert_eq!(decoder.uint16().unwrap(), 9001);
     assert_eq!(decoder.uint32().unwrap(), 1234567890);
@@ -124,7 +124,7 @@ fn eat_own_dog_food() {
 
 #[test]
 fn stacking_bools() {
-    let buffer = Encoder::new()
+    let encoder = Encoder::new()
         .bool(true)
         .bool(false)
         .bool(true)
@@ -135,13 +135,13 @@ fn stacking_bools() {
         .bool(true)
         .bool(false)
         .uint8(10)
-        .bool(true)
-        .end()
-        .unwrap();
+        .bool(true);
+
+    let buffer = encoder.end().unwrap();
 
     assert_eq!(buffer.len(), 4);
 
-    let decoder = Decoder::new(buffer);
+    let mut decoder = Decoder::new(buffer);
     assert_eq!(decoder.bool().unwrap(), true);
     assert_eq!(decoder.bool().unwrap(), false);
     assert_eq!(decoder.bool().unwrap(), true);
@@ -158,8 +158,10 @@ fn stacking_bools() {
 
 #[test]
 fn string_in_bounds() {
+    let encoder = Encoder::new();
+    encoder.string("Some string");
     let buffer = Encoder::new().string("Some string").end().unwrap();
-    let decoder = Decoder::new(buffer);
+    let mut decoder = Decoder::new(buffer);
 
     assert_eq!(decoder.string().unwrap(), "Some string");
     assert_eq!(decoder.end(), true);
