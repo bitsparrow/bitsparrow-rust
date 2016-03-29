@@ -227,7 +227,7 @@ impl Encoder {
         return self.uint32((size as u32) | 0xC0000000);
     }
 
-    /// Store arbitary collection of bytes represented as `&[u8]`,
+    /// Store an arbitary collection of bytes represented as `&[u8]`,
     /// easy to use by dereferencing `Vec<u8>` with `&`.
     pub fn bytes(mut self, bytes: &[u8]) -> Encoder {
         let size = bytes.len();
@@ -352,7 +352,7 @@ impl Decoder {
         Ok(unsafe { mem::transmute_copy(&uint64) })
     }
 
-    /// Read a `bool` fro the buffer and progress the internal index. If
+    /// Read a `bool` from the buffer and progress the internal index. If
     /// a `bool` was previously read from the buffer, calling `bool()`
     /// on the `Decoder` again will read a boolean from the same index
     /// without progressing, but instead shifting to read the next bit.
