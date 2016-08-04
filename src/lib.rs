@@ -340,6 +340,7 @@ impl<'a> Decoder<'a> {
     }
 
     /// Read an `i8` from the buffer and progress the internal index.
+    #[inline]
     pub fn int8(&mut self) -> Result<i8, Error> {
         let uint8 = try!(self.uint8());
 
@@ -347,6 +348,7 @@ impl<'a> Decoder<'a> {
     }
 
     /// Read an `i16` from the buffer and progress the internal index.
+    #[inline]
     pub fn int16(&mut self) -> Result<i16, Error> {
         let uint16 = try!(self.uint16());
 
@@ -354,6 +356,7 @@ impl<'a> Decoder<'a> {
     }
 
     /// Read an `i32` from the buffer and progress the internal index.
+    #[inline]
     pub fn int32(&mut self) -> Result<i32, Error> {
         let uint32 = try!(self.uint32());
 
@@ -361,6 +364,7 @@ impl<'a> Decoder<'a> {
     }
 
     /// Read a `float32` from the buffer and progress the internal index.
+    #[inline]
     pub fn float32(&mut self) -> Result<f32, Error> {
         let uint32 = try!(self.uint32());
 
@@ -368,6 +372,7 @@ impl<'a> Decoder<'a> {
     }
 
     /// Read a `float64` from the buffer and progress the internal index.
+    #[inline]
     pub fn float64(&mut self) -> Result<f64, Error> {
         let uint64 = (try!(self.uint32()) as u64) << 32 |
                      (try!(self.uint32()) as u64);
@@ -450,6 +455,7 @@ impl<'a> Decoder<'a> {
     /// **Note:** BitSparrow internally prefixes `bytes` with
     /// `size` so you don't have to worry about how many bytes
     /// you need to read.
+    #[inline]
     pub fn bytes(&mut self) -> Result<&[u8], Error> {
         let size = try!(self.size());
         if self.index + size > self.data.len() {
@@ -469,6 +475,7 @@ impl<'a> Decoder<'a> {
     /// **Note:** Analog to `bytes`, BitSparrow internally prefixes
     /// `string` with `size` so you don't have to worry about how
     /// many bytes you need to read.
+    #[inline]
     pub fn string(&mut self) -> Result<&str, Error> {
         let bytes = try!(self.bytes());
 
