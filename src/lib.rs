@@ -425,16 +425,16 @@ impl<'a> Decoder<'a> {
     /// explanation on how BitSparrow stores `size` can be found on
     /// [the homepage](http://bitsparrow.io).
     pub fn size(&mut self) -> Result<usize, Error> {
-        let mut size: usize = try!(self.uint8()) as usize;
+        let high = try!(self.uint8());
 
         // 1 byte (no signature)
-        if (size & 128) == 0 {
-            return Ok(size);
+        if (high & 128) == 0 {
+            return Ok(high as usize);
         }
 
-        let sig: u8 = (size as u8) >> 6;
+        let sig = high >> 6;
         // remove signature from the first byte
-        size &= 63 /* 00111111 */;
+        let size = (high as usize) & 63; /* 00111111 */
 
         // 2 bytes (signature is 10)
         if sig == 2 {
@@ -457,14 +457,17 @@ impl<'a> Decoder<'a> {
     /// you need to read.
     #[inline]
     pub fn bytes(&mut self) -> Result<&[u8], Error> {
-        let size = try!(self.size());
-        if self.index + size > self.data.len() {
+        // Order of addition is important here!
+        // Calling `size` will modify the `index`.
+        let end = try!(self.size()) + self.index;
+
+        if end > self.data.len() {
             return Err(Error::ReadingOutOfBounds);
         }
 
-        let bytes = &self.data[self.index .. self.index + size];
+        let bytes = &self.data[self.index .. end];
 
-        self.index += size;
+        self.index = end;
 
         Ok(bytes)
     }
@@ -477,9 +480,7 @@ impl<'a> Decoder<'a> {
     /// many bytes you need to read.
     #[inline]
     pub fn string(&mut self) -> Result<&str, Error> {
-        let bytes = try!(self.bytes());
-
-        str::from_utf8(bytes).map_err(|_| Error::Utf8Encoding)
+        str::from_utf8(try!(self.bytes())).map_err(|_| Error::Utf8Encoding)
     }
 
     /// Returns `true` if the entire buffer has been read, otherwise
