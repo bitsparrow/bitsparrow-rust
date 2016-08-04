@@ -119,8 +119,44 @@ fn eat_own_dog_food() {
     assert_eq!(decoder.size().unwrap(), 1073741823);
     assert_eq!(decoder.float32().unwrap(), PI as f32);
     assert_eq!(decoder.float64().unwrap(), PI);
-    assert_eq!(decoder.end(), true);
+    assert!(decoder.end());
 }
+
+macro_rules! test_type {
+    ($fnname:ident, $t:ident, $v:expr) => (
+        #[test]
+        fn $fnname() {
+            let buffer = Encoder::new().$t($v).end().unwrap();
+            let mut decoder = Decoder::new(buffer);
+            assert_eq!(decoder.$t().unwrap(), $v);
+            assert!(decoder.end());
+        }
+    )
+}
+
+test_type!(bool_true, bool, true);
+test_type!(bool_false, bool, false);
+test_type!(size_zero, size, 0_usize);
+test_type!(size_max, size, 1073741823_usize);
+test_type!(uint8_zero, uint8, 0_u8);
+test_type!(uint8_max, uint8, 255_u8);
+test_type!(uint16_zero, uint16, 0_u16);
+test_type!(uint16_max, uint16, 65535_u16);
+test_type!(uint32_zero, uint32, 0_u32);
+test_type!(uint32_max, uint32, 4294967295_u32);
+test_type!(int8_zero, int8, 0_i8);
+test_type!(int8_max, int8, 127_i8);
+test_type!(int8_min, int8, -128_i8);
+test_type!(int16_zero, int16, 0_i16);
+test_type!(int16_max, int16, 32767_i16);
+test_type!(int16_min, int16, -32768_i16);
+test_type!(int32_zero, int32, 0_i32);
+test_type!(int32_max, int32, 2147483647_i32);
+test_type!(int32_min, int32, -2147483648_i32);
+test_type!(string, string, "Foobar 🐦");
+test_type!(bytes, bytes, &[   0,  10,  20,  30,  40,  50,  60,  70,  80,  90,
+                            100, 110, 120, 130, 140, 150, 160, 170, 180, 190,
+                            200, 210, 220, 230, 240, 250, 255]);
 
 #[test]
 fn stacking_bools() {
