@@ -61,9 +61,7 @@
 //! buffer, which can be handy if you are reading multiple
 //! messages stacked on a single buffer.
 
-use std::mem;
-use std::fmt;
-use std::error;
+use std::{ mem, fmt, error, str };
 
 /// Simple error type returned either by the `Decoder` or `Encoder`
 #[derive(Debug)]
@@ -429,13 +427,13 @@ impl Decoder {
     /// **Note:** BitSparrow internally prefixes `bytes` with
     /// `size` so you don't have to worry about how many bytes
     /// you need to read.
-    pub fn bytes(&mut self) -> Result<Vec<u8>, Error> {
+    pub fn bytes(&mut self) -> Result<&[u8], Error> {
         let size = try!(self.size());
         if self.index + size > self.length {
             return Err(Error::out_of_bounds());
         }
 
-        let bytes = self.data[self.index .. self.index + size].to_vec();
+        let bytes = &self.data[self.index .. self.index + size];
 
         self.index += size;
 
@@ -448,9 +446,9 @@ impl Decoder {
     /// **Note:** Analog to `bytes`, BitSparrow internally prefixes
     /// `string` with `size` so you don't have to worry about how
     /// many bytes you need to read.
-    pub fn string(&mut self) -> Result<String, Error> {
+    pub fn string(&mut self) -> Result<&str, Error> {
         let bytes = try!(self.bytes());
-        return match String::from_utf8(bytes) {
+        return match str::from_utf8(bytes) {
             Ok(string) => Ok(string),
             Err(_) => Err(Error::new("Couldn't decode UTF-8 string")),
         }
