@@ -143,6 +143,23 @@ impl Encoder {
         self
     }
 
+    /// Store a 'u64' on the buffer.
+    #[inline]
+    pub fn uint64(&mut self, uint64: u64) -> &mut Encoder {
+        self.data.extend_from_slice(&[
+            (uint64 >> 56) as u8,
+            (uint64 >> 48) as u8,
+            (uint64 >> 40) as u8,
+            (uint64 >> 32) as u8,
+            (uint64 >> 24) as u8,
+            (uint64 >> 16) as u8,
+            (uint64 >> 8)  as u8,
+             uint64        as u8
+        ]);
+
+        self
+    }
+
     /// Store an `i8` on the buffer.
     #[inline]
     pub fn int8(&mut self, int8: i8) -> &mut Encoder {
@@ -161,6 +178,12 @@ impl Encoder {
         self.uint32(unsafe { mem::transmute(int32) })
     }
 
+    #[inline]
+    /// Store an `i32` on the buffer.
+    pub fn int64(&mut self, int64: i64) -> &mut Encoder {
+        self.uint64(unsafe { mem::transmute(int64) })
+    }
+
     /// Store a `float32` on the buffer.
     #[inline]
     pub fn float32(&mut self, float32: f32) -> &mut Encoder {
@@ -170,10 +193,7 @@ impl Encoder {
     /// Store a `float64` on the buffer.
     #[inline]
     pub fn float64(&mut self, float64: f64) -> &mut Encoder {
-        let uint64: u64 = unsafe { mem::transmute(float64) };
-
-        self.uint32((uint64 >> 32) as u32)
-            .uint32((uint64 & 0xFFFFFFFF) as u32)
+        self.uint64(unsafe { mem::transmute(float64) })
     }
 
     /// Store a `bool` on the buffer. Calling `bool` multiple times
@@ -322,21 +342,57 @@ impl<'a> Decoder<'a> {
     /// Read a `u16` from the buffer and progress the internal index.
     #[inline]
     pub fn uint16(&mut self) -> Result<u16, Error> {
-        Ok(
-            (try!(self.uint8()) as u16) << 8 |
-            (try!(self.uint8()) as u16)
-        )
+        let end = self.index + 2;
+        if end > self.data.len() {
+            return Err(Error::ReadingOutOfBounds);
+        }
+
+        let uint16 = (self.data[self.index]     as u16) << 8 |
+                     (self.data[self.index + 1] as u16);
+
+        self.index = end;
+
+        Ok(uint16)
     }
 
     /// Read a `u32` from the buffer and progress the internal index.
     #[inline]
     pub fn uint32(&mut self) -> Result<u32, Error> {
-        Ok(
-            (try!(self.uint8()) as u32) << 24 |
-            (try!(self.uint8()) as u32) << 16 |
-            (try!(self.uint8()) as u32) << 8  |
-            (try!(self.uint8()) as u32)
-        )
+        let end = self.index + 4;
+        if end > self.data.len() {
+            return Err(Error::ReadingOutOfBounds);
+        }
+
+        let uint32 = (self.data[self.index]     as u32) << 24 |
+                     (self.data[self.index + 1] as u32) << 16 |
+                     (self.data[self.index + 2] as u32) << 8  |
+                     (self.data[self.index + 3] as u32);
+
+        self.index = end;
+
+        Ok(uint32)
+    }
+
+    /// Read a `u64` from the buffer and progress the internal index.
+    #[inline]
+    pub fn uint64(&mut self) -> Result<u64, Error> {
+        let end = self.index + 8;
+        if end > self.data.len() {
+            return Err(Error::ReadingOutOfBounds);
+        }
+
+        let uint64 = (self.data[self.index]     as u64) << 56 |
+                     (self.data[self.index + 1] as u64) << 48 |
+                     (self.data[self.index + 2] as u64) << 40 |
+                     (self.data[self.index + 3] as u64) << 32 |
+                     (self.data[self.index + 4] as u64) << 24 |
+                     (self.data[self.index + 5] as u64) << 16 |
+                     (self.data[self.index + 6] as u64) << 8  |
+                     (self.data[self.index + 7] as u64);
+
+        self.index = end;
+
+        Ok(uint64)
     }
 
     /// Read an `i8` from the buffer and progress the internal index.
@@ -363,6 +419,14 @@ impl<'a> Decoder<'a> {
         Ok(unsafe { mem::transmute(uint32) })
     }
 
+    /// Read an `i64` from the buffer and progress the internal index.
+    #[inline]
+    pub fn int64(&mut self) -> Result<i64, Error> {
+        let uint64 = try!(self.uint64());
+
+        Ok(unsafe { mem::transmute(uint64) })
+    }
+
     /// Read a `float32` from the buffer and progress the internal index.
     #[inline]
     pub fn float32(&mut self) -> Result<f32, Error> {
@@ -374,8 +438,7 @@ impl<'a> Decoder<'a> {
     /// Read a `float64` from the buffer and progress the internal index.
     #[inline]
     pub fn float64(&mut self) -> Result<f64, Error> {
-        let uint64 = (try!(self.uint32()) as u64) << 32 |
-                     (try!(self.uint32()) as u64);
+        let uint64 = try!(self.uint64());
 
         Ok(unsafe { mem::transmute(uint64) })
     }
