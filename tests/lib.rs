@@ -153,6 +153,10 @@ test_type!(int16_min, int16, -32768_i16);
 test_type!(int32_zero, int32, 0_i32);
 test_type!(int32_max, int32, 2147483647_i32);
 test_type!(int32_min, int32, -2147483648_i32);
+test_type!(float32_pos, float32, 3.141592653589793_f32);
+test_type!(float32_neg, float32, -3.141592653589793_f32);
+test_type!(float64_pos, float64, 3.141592653589793_f64);
+test_type!(float64_neg, float64, -3.141592653589793_f64);
 test_type!(string, string, "Foobar 🐦");
 test_type!(bytes, bytes, &[   0,  10,  20,  30,  40,  50,  60,  70,  80,  90,
                             100, 110, 120, 130, 140, 150, 160, 170, 180, 190,

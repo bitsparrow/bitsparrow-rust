@@ -65,27 +65,29 @@ use std::{ mem, fmt, error, str };
 
 /// Simple error type returned either by the `Decoder` or `Encoder`
 #[derive(Debug)]
-pub struct Error(String);
-
-impl Error {
-    pub fn new(msg: &str) -> Error {
-        Error(msg.to_string())
-    }
-
-    pub fn out_of_bounds() -> Error {
-        Error::new("Attempted to read out of bounds")
-    }
+pub enum Error {
+    SizeValueTooLarge,
+    BytesTooLong,
+    StringTooLong,
+    Utf8Encoding,
+    ReadingOutOfBounds,
 }
 
 impl error::Error for Error {
     fn description(&self) -> &str {
-        return &self.0;
+        match *self {
+            Error::SizeValueTooLarge  => "[size] value is too large",
+            Error::BytesTooLong       => "[bytes] value is too long",
+            Error::StringTooLong      => "[string] value is too long",
+            Error::Utf8Encoding       => "Couldn't decode UTF-8 string",
+            Error::ReadingOutOfBounds => "Attempted to read out of bounds",
+        }
     }
 }
 
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.0)
+        write!(f, "{}", error::Error::description(self))
     }
 }
 
@@ -207,7 +209,7 @@ impl Encoder {
     /// on [the homepage](http://bitsparrow.io).
     pub fn size(&mut self, size: usize) -> &mut Encoder {
         if size > 0x3FFFFFFF {
-            self.last_error = Some(Error::new("[size] value is too large"));
+            self.last_error = Some(Error::SizeValueTooLarge);
             return self;
         }
 
@@ -230,7 +232,7 @@ impl Encoder {
     pub fn bytes(&mut self, bytes: &[u8]) -> &mut Encoder {
         let size = bytes.len();
         if size > 0x3FFFFFFF {
-            self.last_error = Some(Error::new("[bytes] is too long"));
+            self.last_error = Some(Error::BytesTooLong);
             return self;
         }
         self.size(size);
@@ -242,7 +244,7 @@ impl Encoder {
     pub fn string(&mut self, string: &str) -> &mut Encoder {
         let size = string.len();
         if size > 0x3FFFFFFF {
-            self.last_error = Some(Error::new("[string] is too long"));
+            self.last_error = Some(Error::StringTooLong);
             return self;
         }
         self.size(size);
@@ -271,7 +273,6 @@ impl Encoder {
 /// were encoded by the `Encoder`.
 pub struct Decoder {
     index: usize,
-    length: usize,
     data: Vec<u8>,
     bool_index: usize,
     bool_shift: u8,
@@ -289,7 +290,6 @@ impl Decoder {
     pub fn new(data: Vec<u8>) -> Decoder {
         Decoder {
             index: 0,
-            length: data.len(),
             data: data,
             bool_index: std::usize::MAX,
             bool_shift: 0,
@@ -298,8 +298,8 @@ impl Decoder {
 
     /// Read a `u8` from the buffer and progress the internal index.
     pub fn uint8(&mut self) -> Result<u8, Error> {
-        if self.index >= self.length {
-            return Err(Error::out_of_bounds());
+        if self.index >= self.data.len() {
+            return Err(Error::ReadingOutOfBounds);
         }
         let uint8 = self.data[self.index];
         self.index += 1;
@@ -327,32 +327,32 @@ impl Decoder {
     /// Read an `i8` from the buffer and progress the internal index.
     pub fn int8(&mut self) -> Result<i8, Error> {
         let uint8 = try!(self.uint8());
-        Ok(unsafe { mem::transmute_copy(&uint8) })
+        Ok(unsafe { mem::transmute(uint8) })
     }
 
     /// Read an `i16` from the buffer and progress the internal index.
     pub fn int16(&mut self) -> Result<i16, Error> {
         let uint16 = try!(self.uint16());
-        Ok(unsafe { mem::transmute_copy(&uint16) })
+        Ok(unsafe { mem::transmute(uint16) })
     }
 
     /// Read an `i32` from the buffer and progress the internal index.
     pub fn int32(&mut self) -> Result<i32, Error> {
         let uint32 = try!(self.uint32());
-        Ok(unsafe { mem::transmute_copy(&uint32) })
+        Ok(unsafe { mem::transmute(uint32) })
     }
 
     /// Read a `float32` from the buffer and progress the internal index.
     pub fn float32(&mut self) -> Result<f32, Error> {
         let uint32 = try!(self.uint32());
-        Ok(unsafe { mem::transmute_copy(&uint32) })
+        Ok(unsafe { mem::transmute(uint32) })
     }
 
     /// Read a `float64` from the buffer and progress the internal index.
     pub fn float64(&mut self) -> Result<f64, Error> {
         let uint64 = (try!(self.uint32()) as u64) << 32 |
                                   (try!(self.uint32()) as u64);
-        Ok(unsafe { mem::transmute_copy(&uint64) })
+        Ok(unsafe { mem::transmute(uint64) })
     }
 
     /// Read a `bool` from the buffer and progress the internal index. If
@@ -406,7 +406,7 @@ impl Decoder {
 
         let sig: u8 = (size as u8) >> 6;
         // remove signature from the first byte
-        size = size & 63 /* 00111111 */;
+        size &= 63 /* 00111111 */;
 
         // 2 bytes (signature is 10)
         if sig == 2 {
@@ -429,8 +429,8 @@ impl Decoder {
     /// you need to read.
     pub fn bytes(&mut self) -> Result<&[u8], Error> {
         let size = try!(self.size());
-        if self.index + size > self.length {
-            return Err(Error::out_of_bounds());
+        if self.index + size > self.data.len() {
+            return Err(Error::ReadingOutOfBounds);
         }
 
         let bytes = &self.data[self.index .. self.index + size];
@@ -450,13 +450,13 @@ impl Decoder {
         let bytes = try!(self.bytes());
         return match str::from_utf8(bytes) {
             Ok(string) => Ok(string),
-            Err(_) => Err(Error::new("Couldn't decode UTF-8 string")),
+            Err(_) => Err(Error::Utf8Encoding),
         }
     }
 
     /// Returns `true` if the entire buffer has been read, otherwise
     /// returns `false`.
     pub fn end(&self) -> bool {
-        self.index >= self.length
+        self.index >= self.data.len()
     }
 }
