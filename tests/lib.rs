@@ -124,7 +124,7 @@ fn eat_own_dog_food() {
 
 #[test]
 fn stacking_bools() {
-    let encoder = Encoder::new()
+    let buffer = Encoder::new()
         .bool(true)
         .bool(false)
         .bool(true)
@@ -135,9 +135,8 @@ fn stacking_bools() {
         .bool(true)
         .bool(false)
         .uint8(10)
-        .bool(true);
-
-    let buffer = encoder.end().unwrap();
+        .bool(true)
+        .end().unwrap();
 
     assert_eq!(buffer.len(), 4);
 
@@ -158,8 +157,9 @@ fn stacking_bools() {
 
 #[test]
 fn string_in_bounds() {
-    let encoder = Encoder::new();
+    let mut encoder = Encoder::new();
     encoder.string("Some string");
+
     let buffer = Encoder::new().string("Some string").end().unwrap();
     let mut decoder = Decoder::new(buffer);
 

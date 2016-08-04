@@ -17,15 +17,15 @@
 //! assert_eq!(buffer, vec![0x64,0x03,0x46,0x6f,0x6f])
 //! ```
 //!
-//! Each method on the `Encoder` will consume the instance of the
-//! struct. If you need to break the monad chain, store the
-//! intermediate state of the encoder, e.g.:
+//! Each method on the `Encoder` will return a mutable borrow of
+//! the encoder. If you need to break the monad chain, store the
+//! owned encoder as a variable before writing to it, e.g.:
 //!
 //! ```
 //! use bitsparrow::Encoder;
 //!
-//! let encoder = Encoder::new()
-//!               .uint8(100);
+//! let mut encoder = Encoder::new();
+//! encoder.uint8(100);
 //!
 //! /*
 //!  * Many codes here
@@ -112,13 +112,13 @@ impl Encoder {
     }
 
     /// Store a `u8` on the buffer.
-    pub fn uint8(mut self, uint8: u8) -> Encoder {
+    pub fn uint8(&mut self, uint8: u8) -> &mut Encoder {
         self.data.push(uint8);
         return self;
     }
 
     /// Store a 'u16' on the buffer.
-    pub fn uint16(mut self, uint16: u16) -> Encoder {
+    pub fn uint16(&mut self, uint16: u16) -> &mut Encoder {
         self.data.reserve(2);
         self.data.push((uint16 >> 8) as u8);
         self.data.push((uint16 & 0xFF) as u8);
@@ -126,7 +126,7 @@ impl Encoder {
     }
 
     /// Store a 'u32' on the buffer.
-    pub fn uint32(mut self, uint32: u32) -> Encoder {
+    pub fn uint32(&mut self, uint32: u32) -> &mut Encoder {
         self.data.reserve(4);
         self.data.push((uint32 >> 24) as u8);
         self.data.push(((uint32 >> 16) & 0xFF) as u8);
@@ -136,27 +136,27 @@ impl Encoder {
     }
 
     /// Store an `i8` on the buffer.
-    pub fn int8(self, int8: i8) -> Encoder {
+    pub fn int8(&mut self, int8: i8) -> &mut Encoder {
         self.uint8(unsafe { mem::transmute_copy(&int8) })
     }
 
     /// Store an `i16` on the buffer.
-    pub fn int16(self, int16: i16) -> Encoder {
+    pub fn int16(&mut self, int16: i16) -> &mut Encoder {
         self.uint16(unsafe { mem::transmute_copy(&int16) })
     }
 
     /// Store an `i32` on the buffer.
-    pub fn int32(self, int32: i32) -> Encoder {
+    pub fn int32(&mut self, int32: i32) -> &mut Encoder {
         self.uint32(unsafe { mem::transmute_copy(&int32) })
     }
 
     /// Store a `float32` on the buffer.
-    pub fn float32(self, float32: f32) -> Encoder {
+    pub fn float32(&mut self, float32: f32) -> &mut Encoder {
         self.uint32(unsafe { mem::transmute_copy(&float32) })
     }
 
     /// Store a `float64` on the buffer.
-    pub fn float64(self, float64: f64) -> Encoder {
+    pub fn float64(&mut self, float64: f64) -> &mut Encoder {
         let uint64: u64 = unsafe { mem::transmute_copy(&float64) };
         return self
             .uint32((uint64 >> 32) as u32)
@@ -185,7 +185,7 @@ impl Encoder {
     /// // booleans are stacked as bits on a single byte, right to left.
     /// assert_eq!(vec![0b11100001], buffer);
     /// ```
-    pub fn bool(mut self, bool: bool) -> Encoder {
+    pub fn bool(&mut self, bool: bool) -> &mut Encoder {
         let bool_bit: u8 = if bool { 1 } else { 0 };
         let index = self.data.len();
 
@@ -207,7 +207,7 @@ impl Encoder {
     /// number type such as u32 could be an overkill if all you want to send is
     /// `"Foo"`. Detailed explanation on how BitSparrow stores `size` can be found
     /// on [the homepage](http://bitsparrow.io).
-    pub fn size(mut self, size: usize) -> Encoder {
+    pub fn size(&mut self, size: usize) -> &mut Encoder {
         if size > 0x3FFFFFFF {
             self.last_error = Some(Error::new("[size] value is too large"));
             return self;
@@ -229,35 +229,40 @@ impl Encoder {
 
     /// Store an arbitary collection of bytes represented as `&[u8]`,
     /// easy to use by dereferencing `Vec<u8>` with `&`.
-    pub fn bytes(mut self, bytes: &[u8]) -> Encoder {
+    pub fn bytes(&mut self, bytes: &[u8]) -> &mut Encoder {
         let size = bytes.len();
         if size > 0x3FFFFFFF {
             self.last_error = Some(Error::new("[bytes] is too long"));
             return self;
         }
-        let mut sref = self.size(size);
-        sref.data.extend_from_slice(bytes);
-        return sref;
+        self.size(size);
+        self.data.extend_from_slice(bytes);
+        return self;
     }
 
     /// Store an arbitrary UTF-8 Rust string on the buffer.
-    pub fn string(mut self, string: &str) -> Encoder {
+    pub fn string(&mut self, string: &str) -> &mut Encoder {
         let size = string.len();
         if size > 0x3FFFFFFF {
             self.last_error = Some(Error::new("[string] is too long"));
             return self;
         }
-        let mut sref = self.size(size);
-        sref.data.extend_from_slice(string.as_bytes());
-        return sref;
+        self.size(size);
+        self.data.extend_from_slice(string.as_bytes());
+        return self;
     }
 
-    /// Finish encoding, consume the encoder and return the product
-    /// buffer or the last error from the monad chain.
-    pub fn end(self) -> Result<Vec<u8>, Error> {
-        match self.last_error {
+    /// Finish encoding, resets the encoder
+    pub fn end(&mut self) -> Result<Vec<u8>, Error> {
+        let error = self.last_error.take();
+        match error {
             Some(error) => Err(error),
-            None        => Ok(self.data),
+            None        => {
+                self.bool_index = std::usize::MAX;
+                self.bool_shift = 0;
+
+                Ok(mem::replace(&mut self.data, Vec::new()))
+            }
         }
     }
 }
