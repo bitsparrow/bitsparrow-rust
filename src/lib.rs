@@ -14,7 +14,7 @@
 //!              .end()
 //!              .unwrap();
 //!
-//! assert_eq!(buffer, vec![0x64,0x03,0x46,0x6f,0x6f])
+//! assert_eq!(buffer, &[0x64,0x03,0x46,0x6f,0x6f])
 //! ```
 //!
 //! Each method on the `Encoder` will return a mutable borrow of
@@ -35,7 +35,7 @@
 //!              .end()
 //!              .unwrap();
 //!
-//! assert_eq!(buffer, vec![0x64,0x03,0x46,0x6f,0x6f]);
+//! assert_eq!(buffer, &[0x64_u8,0x03,0x46,0x6f,0x6f]);
 //! ```
 //!
 //! To make the monad chain feasible, Encoder will internally
@@ -47,7 +47,7 @@
 //! ```
 //! use bitsparrow::Decoder;
 //!
-//! let buffer: Vec<u8> = vec![0x64,0x03,0x46,0x6f,0x6f];
+//! let buffer = &[0x64,0x03,0x46,0x6f,0x6f];
 //! let mut decoder = Decoder::new(buffer);
 //!
 //! assert_eq!(100u8, decoder.uint8().unwrap());
@@ -55,11 +55,10 @@
 //! assert_eq!(true, decoder.end());
 //! ```
 //!
-//! Decoder consumes the buffer and allows you to retrieve the
-//! values in order they were encoded. Calling the `end` method
-//! is optional, it will return true if you have read the entire
-//! buffer, which can be handy if you are reading multiple
-//! messages stacked on a single buffer.
+//! Decoder allows you to retrieve the values in order they were
+//! encoded. Calling the `end` method is optional - it will return
+//! `true` if you have read the entire buffer, ensuring the entire
+//! buffer has been read.
 
 use std::{ mem, fmt, error, str };
 
@@ -102,6 +101,7 @@ pub struct Encoder {
 
 impl Encoder {
     /// Create a new instance of the `Encoder`.
+    #[inline]
     pub fn new() -> Encoder {
         Encoder {
             data: Vec::new(),
@@ -112,55 +112,68 @@ impl Encoder {
     }
 
     /// Store a `u8` on the buffer.
+    #[inline]
     pub fn uint8(&mut self, uint8: u8) -> &mut Encoder {
         self.data.push(uint8);
-        return self;
+
+        self
     }
 
     /// Store a 'u16' on the buffer.
+    #[inline]
     pub fn uint16(&mut self, uint16: u16) -> &mut Encoder {
-        self.data.reserve(2);
-        self.data.push((uint16 >> 8) as u8);
-        self.data.push((uint16 & 0xFF) as u8);
-        return self;
+        self.data.extend_from_slice(&[
+            (uint16 >> 8) as u8,
+             uint16 as       u8
+        ]);
+
+        self
     }
 
     /// Store a 'u32' on the buffer.
+    #[inline]
     pub fn uint32(&mut self, uint32: u32) -> &mut Encoder {
-        self.data.reserve(4);
-        self.data.push((uint32 >> 24) as u8);
-        self.data.push(((uint32 >> 16) & 0xFF) as u8);
-        self.data.push(((uint32 >> 8) & 0xFF) as u8);
-        self.data.push((uint32 & 0xFF) as u8);
-        return self;
+        self.data.extend_from_slice(&[
+            (uint32 >> 24) as u8,
+            (uint32 >> 16) as u8,
+            (uint32 >> 8)  as u8,
+             uint32        as u8
+        ]);
+
+        self
     }
 
     /// Store an `i8` on the buffer.
+    #[inline]
     pub fn int8(&mut self, int8: i8) -> &mut Encoder {
-        self.uint8(unsafe { mem::transmute_copy(&int8) })
+        self.uint8(unsafe { mem::transmute(int8) })
     }
 
     /// Store an `i16` on the buffer.
+    #[inline]
     pub fn int16(&mut self, int16: i16) -> &mut Encoder {
-        self.uint16(unsafe { mem::transmute_copy(&int16) })
+        self.uint16(unsafe { mem::transmute(int16) })
     }
 
+    #[inline]
     /// Store an `i32` on the buffer.
     pub fn int32(&mut self, int32: i32) -> &mut Encoder {
-        self.uint32(unsafe { mem::transmute_copy(&int32) })
+        self.uint32(unsafe { mem::transmute(int32) })
     }
 
     /// Store a `float32` on the buffer.
+    #[inline]
     pub fn float32(&mut self, float32: f32) -> &mut Encoder {
-        self.uint32(unsafe { mem::transmute_copy(&float32) })
+        self.uint32(unsafe { mem::transmute(float32) })
     }
 
     /// Store a `float64` on the buffer.
+    #[inline]
     pub fn float64(&mut self, float64: f64) -> &mut Encoder {
-        let uint64: u64 = unsafe { mem::transmute_copy(&float64) };
-        return self
-            .uint32((uint64 >> 32) as u32)
-            .uint32((uint64 & 0xFFFFFFFF) as u32);
+        let uint64: u64 = unsafe { mem::transmute(float64) };
+
+        self.uint32((uint64 >> 32) as u32)
+            .uint32((uint64 & 0xFFFFFFFF) as u32)
     }
 
     /// Store a `bool` on the buffer. Calling `bool` multiple times
@@ -183,8 +196,9 @@ impl Encoder {
     ///              .unwrap();
     ///
     /// // booleans are stacked as bits on a single byte, right to left.
-    /// assert_eq!(vec![0b11100001], buffer);
+    /// assert_eq!(buffer, &[0b11100001]);
     /// ```
+    #[inline]
     pub fn bool(&mut self, bool: bool) -> &mut Encoder {
         let bool_bit: u8 = if bool { 1 } else { 0 };
         let index = self.data.len();
@@ -197,6 +211,7 @@ impl Encoder {
 
         self.bool_index = index + 1;
         self.bool_shift = 0;
+
         self.uint8(bool_bit)
     }
 
@@ -207,6 +222,7 @@ impl Encoder {
     /// number type such as u32 could be an overkill if all you want to send is
     /// `"Foo"`. Detailed explanation on how BitSparrow stores `size` can be found
     /// on [the homepage](http://bitsparrow.io).
+    #[inline]
     pub fn size(&mut self, size: usize) -> &mut Encoder {
         if size > 0x3FFFFFFF {
             self.last_error = Some(Error::SizeValueTooLarge);
@@ -224,32 +240,34 @@ impl Encoder {
         }
 
         // use up to 30 bits
-        return self.uint32((size as u32) | 0xC0000000);
+        self.uint32((size as u32) | 0xC0000000)
     }
 
     /// Store an arbitary collection of bytes represented as `&[u8]`,
     /// easy to use by dereferencing `Vec<u8>` with `&`.
+    #[inline]
     pub fn bytes(&mut self, bytes: &[u8]) -> &mut Encoder {
-        let size = bytes.len();
-        if size > 0x3FFFFFFF {
+        if bytes.len() > 0x3FFFFFFF {
             self.last_error = Some(Error::BytesTooLong);
             return self;
         }
-        self.size(size);
+        self.size(bytes.len());
         self.data.extend_from_slice(bytes);
-        return self;
+
+        self
     }
 
     /// Store an arbitrary UTF-8 Rust string on the buffer.
+    #[inline]
     pub fn string(&mut self, string: &str) -> &mut Encoder {
-        let size = string.len();
-        if size > 0x3FFFFFFF {
+        if string.len() > 0x3FFFFFFF {
             self.last_error = Some(Error::StringTooLong);
             return self;
         }
-        self.size(size);
+        self.size(string.len());
         self.data.extend_from_slice(string.as_bytes());
-        return self;
+
+        self
     }
 
     /// Finish encoding, resets the encoder
@@ -268,26 +286,20 @@ impl Encoder {
 }
 
 
-/// Decoder consumes a buffer represented as `Vec<u8>` and exposes
+/// Decoder reads from a binary slice buffer (`&[u8]`) and exposes
 /// methods to read BitSparrow types from it in the same order they
 /// were encoded by the `Encoder`.
-pub struct Decoder {
+pub struct Decoder<'a> {
     index: usize,
-    data: Vec<u8>,
+    data: &'a [u8],
     bool_index: usize,
     bool_shift: u8,
 }
 
-impl Decoder {
-    /// Consume a buffer represented as `Vec<u8>` and return a new
-    /// instance of the `Decoder`.
-    ///
-    /// **Note:** Decoder does not mutate the buffer, but it needs to
-    ///           progress it's internal state, hence it has to be mutable.
-    ///           This also prevents it from being borrowed and used in
-    ///           multiple places at the same time, which would be an
-    ///           anti-pattern.
-    pub fn new(data: Vec<u8>) -> Decoder {
+impl<'a> Decoder<'a> {
+    /// Create a new `Decoder` reading from a `&[u8]` slice buffer.
+    #[inline]
+    pub fn new(data: &[u8]) -> Decoder {
         Decoder {
             index: 0,
             data: data,
@@ -297,6 +309,7 @@ impl Decoder {
     }
 
     /// Read a `u8` from the buffer and progress the internal index.
+    #[inline]
     pub fn uint8(&mut self) -> Result<u8, Error> {
         if self.index >= self.data.len() {
             return Err(Error::ReadingOutOfBounds);
@@ -307,6 +320,7 @@ impl Decoder {
     }
 
     /// Read a `u16` from the buffer and progress the internal index.
+    #[inline]
     pub fn uint16(&mut self) -> Result<u16, Error> {
         Ok(
             (try!(self.uint8()) as u16) << 8 |
@@ -315,6 +329,7 @@ impl Decoder {
     }
 
     /// Read a `u32` from the buffer and progress the internal index.
+    #[inline]
     pub fn uint32(&mut self) -> Result<u32, Error> {
         Ok(
             (try!(self.uint8()) as u32) << 24 |
@@ -327,31 +342,36 @@ impl Decoder {
     /// Read an `i8` from the buffer and progress the internal index.
     pub fn int8(&mut self) -> Result<i8, Error> {
         let uint8 = try!(self.uint8());
+
         Ok(unsafe { mem::transmute(uint8) })
     }
 
     /// Read an `i16` from the buffer and progress the internal index.
     pub fn int16(&mut self) -> Result<i16, Error> {
         let uint16 = try!(self.uint16());
+
         Ok(unsafe { mem::transmute(uint16) })
     }
 
     /// Read an `i32` from the buffer and progress the internal index.
     pub fn int32(&mut self) -> Result<i32, Error> {
         let uint32 = try!(self.uint32());
+
         Ok(unsafe { mem::transmute(uint32) })
     }
 
     /// Read a `float32` from the buffer and progress the internal index.
     pub fn float32(&mut self) -> Result<f32, Error> {
         let uint32 = try!(self.uint32());
+
         Ok(unsafe { mem::transmute(uint32) })
     }
 
     /// Read a `float64` from the buffer and progress the internal index.
     pub fn float64(&mut self) -> Result<f64, Error> {
         let uint64 = (try!(self.uint32()) as u64) << 32 |
-                                  (try!(self.uint32()) as u64);
+                     (try!(self.uint32()) as u64);
+
         Ok(unsafe { mem::transmute(uint64) })
     }
 
@@ -366,7 +386,8 @@ impl Decoder {
     /// use bitsparrow::Decoder;
     ///
     /// // Reading `bools` from a single byte.
-    /// let mut decoder = Decoder::new(vec![0b11100001]);
+    /// let buffer = &[0b11100001];
+    /// let mut decoder = Decoder::new(buffer);
     ///
     /// assert_eq!(true, decoder.bool().unwrap());
     /// assert_eq!(false, decoder.bool().unwrap());
@@ -377,7 +398,7 @@ impl Decoder {
     /// assert_eq!(true, decoder.bool().unwrap());
     /// assert_eq!(true, decoder.bool().unwrap());
     ///
-    /// // Ensure we consumed the whole buffer
+    /// // Ensure we've read the entire buffer
     /// assert_eq!(true, decoder.end());
     /// ```
     pub fn bool(&mut self) -> Result<bool, Error> {
@@ -387,10 +408,12 @@ impl Decoder {
             let bool_bit = 1 << self.bool_shift;
             return Ok(bits & bool_bit == bool_bit);
         }
+
         let bits = try!(self.uint8());
         self.bool_index = self.index;
         self.bool_shift = 0;
-        return Ok(bits & 1 == 1);
+
+        Ok(bits & 1 == 1)
     }
 
     /// Read a `usize` from the buffer and progress the index. Detailed
@@ -437,7 +460,7 @@ impl Decoder {
 
         self.index += size;
 
-        return Ok(bytes);
+        Ok(bytes)
     }
 
     /// Read an arbitary sized owned `String` from the buffer and
@@ -448,14 +471,13 @@ impl Decoder {
     /// many bytes you need to read.
     pub fn string(&mut self) -> Result<&str, Error> {
         let bytes = try!(self.bytes());
-        return match str::from_utf8(bytes) {
-            Ok(string) => Ok(string),
-            Err(_) => Err(Error::Utf8Encoding),
-        }
+
+        str::from_utf8(bytes).map_err(|_| Error::Utf8Encoding)
     }
 
     /// Returns `true` if the entire buffer has been read, otherwise
     /// returns `false`.
+    #[inline]
     pub fn end(&self) -> bool {
         self.index >= self.data.len()
     }
