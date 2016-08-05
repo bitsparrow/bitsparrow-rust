@@ -10,10 +10,9 @@ use bitsparrow::Encoder;
 let buffer = Encoder::new()
 .uint8(100)
 .string("Foo")
-.end()
-.unwrap();
+.end();
 
-assert_eq!(buffer, vec![0x64,0x03,0x46,0x6f,0x6f])
+assert_eq!(buffer, &[0x64,0x03,0x46,0x6f,0x6f])
 ```
 
 Each method on the `Encoder` will consume the instance of the
@@ -30,23 +29,17 @@ let encoder = Encoder::new()
 * Many codes here
 */
 
-let buffer = encoder.string("Foo")
-.end()
-.unwrap();
+let buffer = encoder.string("Foo").end();
 
-assert_eq!(buffer, vec![0x64,0x03,0x46,0x6f,0x6f]);
+assert_eq!(buffer, &[0x64,0x03,0x46,0x6f,0x6f]);
 ```
-
-To make the monad chain feasible, Encoder will internally
-store the last error (if any) that occures during the chain,
-and return in on the `Result` of the `end` method.
 
 ## Decoding
 
 ```rust
 use bitsparrow::Decoder;
 
-let buffer: Vec<u8> = vec![0x64,0x03,0x46,0x6f,0x6f];
+let buffer = &[0x64,0x03,0x46,0x6f,0x6f];
 let mut decoder = Decoder::new(buffer);
 
 assert_eq!(100u8, decoder.uint8().unwrap());
@@ -54,11 +47,10 @@ assert_eq!("Foo", decoder.string().unwrap());
 assert_eq!(true, decoder.end());
 ```
 
-Decoder consumes the buffer and allows you to retrieve the
-values in order they were encoded. Calling the `end` method
-is optional, it will return true if you have read the entire
-buffer, which can be handy if you are reading multiple
-messages stacked on a single buffer.
+Decoder allows you to retrieve the values in order they were
+encoded. Calling the `end` method is optional - it will return
+`true` if you have read the entire buffer, ensuring the entire
+buffer has been read.
 
 ## The MIT License (MIT)
 

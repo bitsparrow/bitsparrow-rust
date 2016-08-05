@@ -35,10 +35,6 @@
 //! assert_eq!(buffer, &[0x64_u8,0x03,0x46,0x6f,0x6f]);
 //! ```
 //!
-//! To make the monad chain feasible, Encoder will internally
-//! store the last error (if any) that occures during the chain,
-//! and return in on the `Result` of the `end` method.
-//!
 //! ## Decoding
 //!
 //! ```
@@ -305,7 +301,7 @@ impl Encoder {
         self
     }
 
-    /// Finish encoding, resets the encoder
+    /// Finish encoding, obtain the buffer and reset the encoder.
     #[inline]
     pub fn end(&mut self) -> Vec<u8> {
         self.bool_index = std::usize::MAX;
