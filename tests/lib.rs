@@ -154,11 +154,12 @@ test_type!(size_zero, size, 0_usize);
 test_type!(size_1, size, 0x7F_usize);
 test_type!(size_2, size, 0x3FFF_usize);
 test_type!(size_3, size, 0x1FFFFF_usize);
-test_type!(size_4, size, 0xFFFFFFFF_usize);
-test_type!(size_5, size, 0x7FFFFFFFFF_usize);
-test_type!(size_6, size, 0x3FFFFFFFFFFF_usize);
-test_type!(size_7, size, 0x1FFFFFFFFFFFFF_usize);
-test_type!(size_8, size, 0xFFFFFFFFFFFFFFFF_usize);
+test_type!(size_4, size, 0x0FFFFFFF_usize);
+test_type!(size_5, size, 0x07FFFFFFFF_usize);
+test_type!(size_6, size, 0x03FFFFFFFFFF_usize);
+test_type!(size_7, size, 0x01FFFFFFFFFFFF_usize);
+test_type!(size_8, size, 0x00FFFFFFFFFFFFFF_usize);
+test_type!(size_9, size, 0xFFFFFFFFFFFFFFFF_usize);
 test_type!(size_max, size, ::std::usize::MAX); // max here is different from `usize::MAX`
 test_type!(uint8_zero, uint8, 0_u8);
 test_type!(uint8_max, uint8, ::std::u8::MAX);
@@ -188,6 +189,51 @@ test_type!(string, string, "Foobar 🐦");
 test_type!(bytes, bytes, &[   0,  10,  20,  30,  40,  50,  60,  70,  80,  90,
                             100, 110, 120, 130, 140, 150, 160, 170, 180, 190,
                             200, 210, 220, 230, 240, 250, 255]);
+
+#[test]
+fn size_check_len_1() {
+    assert_eq!(Encoder::new().size(0x7F).end().len(), 1);
+}
+
+#[test]
+fn size_check_len_2() {
+    assert_eq!(Encoder::new().size(0x3FFF).end().len(), 2);
+}
+
+#[test]
+fn size_check_len_3() {
+    assert_eq!(Encoder::new().size(0x1FFFFF).end().len(), 3);
+}
+
+#[test]
+fn size_check_len_4() {
+    assert_eq!(Encoder::new().size(0x0FFFFFFF).end().len(), 4);
+}
+
+#[test]
+fn size_check_len_5() {
+    assert_eq!(Encoder::new().size(0x07FFFFFFFF).end().len(), 5);
+}
+
+#[test]
+fn size_check_len_6() {
+    assert_eq!(Encoder::new().size(0x03FFFFFFFFFF).end().len(), 6);
+}
+
+#[test]
+fn size_check_len_7() {
+    assert_eq!(Encoder::new().size(0x01FFFFFFFFFFFF).end().len(), 7);
+}
+
+#[test]
+fn size_check_len_8() {
+    assert_eq!(Encoder::new().size(0x00FFFFFFFFFFFFFF).end().len(), 8);
+}
+
+#[test]
+fn size_check_len_9() {
+    assert_eq!(Encoder::new().size(0xFFFFFFFFFFFFFFFF).end().len(), 9);
+}
 
 #[test]
 fn stacking_bools() {
