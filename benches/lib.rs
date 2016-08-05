@@ -19,7 +19,7 @@ fn allocate_8(b: &mut Bencher) {
 #[bench]
 fn encode_u64(b: &mut Bencher) {
     b.iter(|| {
-        Encoder::new().uint64(::std::u64::MAX).end().unwrap()
+        Encoder::new().uint64(::std::u64::MAX).end()
     })
 }
 
@@ -27,17 +27,27 @@ fn encode_u64(b: &mut Bencher) {
 #[bench]
 fn encode_f64(b: &mut Bencher) {
     b.iter(|| {
-        Encoder::new().float64(3.141592653589793).end().unwrap()
+        Encoder::new().float64(3.141592653589793).end()
     })
 }
 
 
 #[bench]
 fn decode_u64(b: &mut Bencher) {
-    let buffer = Encoder::new().uint64(::std::u64::MAX).end().unwrap();
+    let buffer = Encoder::new().uint64(::std::u64::MAX).end();
 
     b.iter(|| {
         let mut decoder = Decoder::new(&buffer);
         decoder.uint64().unwrap()
+    })
+}
+
+#[bench]
+fn decode_f64(b: &mut Bencher) {
+    let buffer = Encoder::new().float64(3.141592653589793).end();
+
+    b.iter(|| {
+        let mut decoder = Decoder::new(&buffer);
+        decoder.float64().unwrap()
     })
 }

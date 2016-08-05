@@ -322,6 +322,31 @@ pub struct Decoder<'a> {
     bool_shift: u8,
 }
 
+macro_rules! read_bytes {
+    ($decoder:expr, $t:ident) => ({
+        let size = mem::size_of::<$t>();
+        let end = $decoder.index + size;
+        if end > $decoder.data.len() {
+            return Err(Error::ReadingOutOfBounds);
+        }
+
+        unsafe {
+            let mut value: $t = mem::uninitialized();
+            let ptr: *mut u8 = mem::transmute(&mut value);
+
+            ptr::copy_nonoverlapping(
+                $decoder.data.as_ptr().offset($decoder.index as isize),
+                ptr,
+                size
+            );
+
+            $decoder.index = end;
+
+            Ok($t::from_be(value))
+        }
+    })
+}
+
 impl<'a> Decoder<'a> {
     /// Create a new `Decoder` reading from a `&[u8]` slice buffer.
     #[inline]
@@ -348,57 +373,19 @@ impl<'a> Decoder<'a> {
     /// Read a `u16` from the buffer and progress the internal index.
     #[inline]
     pub fn uint16(&mut self) -> Result<u16, Error> {
-        let end = self.index + 2;
-        if end > self.data.len() {
-            return Err(Error::ReadingOutOfBounds);
-        }
-
-        let uint16 = (self.data[self.index]     as u16) << 8 |
-                     (self.data[self.index + 1] as u16);
-
-        self.index = end;
-
-        Ok(uint16)
+        read_bytes!(self, u16)
     }
 
     /// Read a `u32` from the buffer and progress the internal index.
     #[inline]
     pub fn uint32(&mut self) -> Result<u32, Error> {
-        let end = self.index + 4;
-        if end > self.data.len() {
-            return Err(Error::ReadingOutOfBounds);
-        }
-
-        let uint32 = (self.data[self.index]     as u32) << 24 |
-                     (self.data[self.index + 1] as u32) << 16 |
-                     (self.data[self.index + 2] as u32) << 8  |
-                     (self.data[self.index + 3] as u32);
-
-        self.index = end;
-
-        Ok(uint32)
+        read_bytes!(self, u32)
     }
 
     /// Read a `u64` from the buffer and progress the internal index.
     #[inline]
     pub fn uint64(&mut self) -> Result<u64, Error> {
-        let end = self.index + 8;
-        if end > self.data.len() {
-            return Err(Error::ReadingOutOfBounds);
-        }
-
-        let uint64 = (self.data[self.index]     as u64) << 56 |
-                     (self.data[self.index + 1] as u64) << 48 |
-                     (self.data[self.index + 2] as u64) << 40 |
-                     (self.data[self.index + 3] as u64) << 32 |
-                     (self.data[self.index + 4] as u64) << 24 |
-                     (self.data[self.index + 5] as u64) << 16 |
-                     (self.data[self.index + 6] as u64) << 8  |
-                     (self.data[self.index + 7] as u64);
-
-        self.index = end;
-
-        Ok(uint64)
+        read_bytes!(self, u64)
     }
 
     /// Read an `i8` from the buffer and progress the internal index.
@@ -406,31 +393,25 @@ impl<'a> Decoder<'a> {
     pub fn int8(&mut self) -> Result<i8, Error> {
         let uint8 = try!(self.uint8());
 
-        Ok(unsafe { mem::transmute(uint8) })
+        Ok(uint8 as i8)
     }
 
     /// Read an `i16` from the buffer and progress the internal index.
     #[inline]
     pub fn int16(&mut self) -> Result<i16, Error> {
-        let uint16 = try!(self.uint16());
-
-        Ok(unsafe { mem::transmute(uint16) })
+        read_bytes!(self, i16)
     }
 
     /// Read an `i32` from the buffer and progress the internal index.
     #[inline]
     pub fn int32(&mut self) -> Result<i32, Error> {
-        let uint32 = try!(self.uint32());
-
-        Ok(unsafe { mem::transmute(uint32) })
+        read_bytes!(self, i32)
     }
 
     /// Read an `i64` from the buffer and progress the internal index.
     #[inline]
     pub fn int64(&mut self) -> Result<i64, Error> {
-        let uint64 = try!(self.uint64());
-
-        Ok(unsafe { mem::transmute(uint64) })
+        read_bytes!(self, i64)
     }
 
     /// Read a `float32` from the buffer and progress the internal index.
