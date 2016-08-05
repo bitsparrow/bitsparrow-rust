@@ -60,7 +60,7 @@
 //! `true` if you have read the entire buffer, ensuring the entire
 //! buffer has been read.
 
-use std::{ mem, fmt, error, str };
+use std::{ mem, fmt, error, str, ptr };
 
 /// Simple error type returned either by the `Decoder` or `Encoder`
 #[derive(Debug)]
@@ -99,12 +99,42 @@ pub struct Encoder {
     last_error: Option<Error>,
 }
 
+macro_rules! write_bytes {
+    ($data:expr, $value:ident) => ({
+        unsafe {
+            let size = mem::size_of_val(&$value);
+            let ptr: *const u8 = mem::transmute(&$value.to_be());
+
+            let len = $data.len();
+            $data.reserve(size);
+            $data.set_len(len + size);
+
+            ptr::copy_nonoverlapping(
+                ptr,
+                $data.as_mut_ptr().offset(len as isize),
+                size
+            );
+        }
+    })
+}
+
 impl Encoder {
     /// Create a new instance of the `Encoder`.
     #[inline]
     pub fn new() -> Encoder {
         Encoder {
             data: Vec::new(),
+            bool_index: std::usize::MAX,
+            bool_shift: 0,
+            last_error: None,
+        }
+    }
+
+    /// Create a new instance of the `Encoder` with a preallocated buffer capacity.
+    #[inline]
+    pub fn with_capacity(capacity: usize) -> Encoder {
+        Encoder {
+            data: Vec::with_capacity(capacity),
             bool_index: std::usize::MAX,
             bool_shift: 0,
             last_error: None,
@@ -122,10 +152,7 @@ impl Encoder {
     /// Store a 'u16' on the buffer.
     #[inline]
     pub fn uint16(&mut self, uint16: u16) -> &mut Encoder {
-        self.data.extend_from_slice(&[
-            (uint16 >> 8) as u8,
-             uint16 as       u8
-        ]);
+        write_bytes!(self.data, uint16);
 
         self
     }
@@ -133,12 +160,7 @@ impl Encoder {
     /// Store a 'u32' on the buffer.
     #[inline]
     pub fn uint32(&mut self, uint32: u32) -> &mut Encoder {
-        self.data.extend_from_slice(&[
-            (uint32 >> 24) as u8,
-            (uint32 >> 16) as u8,
-            (uint32 >> 8)  as u8,
-             uint32        as u8
-        ]);
+        write_bytes!(self.data, uint32);
 
         self
     }
@@ -146,16 +168,7 @@ impl Encoder {
     /// Store a 'u64' on the buffer.
     #[inline]
     pub fn uint64(&mut self, uint64: u64) -> &mut Encoder {
-        self.data.extend_from_slice(&[
-            (uint64 >> 56) as u8,
-            (uint64 >> 48) as u8,
-            (uint64 >> 40) as u8,
-            (uint64 >> 32) as u8,
-            (uint64 >> 24) as u8,
-            (uint64 >> 16) as u8,
-            (uint64 >> 8)  as u8,
-             uint64        as u8
-        ]);
+        write_bytes!(self.data, uint64);
 
         self
     }
@@ -163,25 +176,33 @@ impl Encoder {
     /// Store an `i8` on the buffer.
     #[inline]
     pub fn int8(&mut self, int8: i8) -> &mut Encoder {
-        self.uint8(unsafe { mem::transmute(int8) })
+        self.data.push(int8 as u8);
+
+        self
     }
 
     /// Store an `i16` on the buffer.
     #[inline]
     pub fn int16(&mut self, int16: i16) -> &mut Encoder {
-        self.uint16(unsafe { mem::transmute(int16) })
+        write_bytes!(self.data, int16);
+
+        self
     }
 
     #[inline]
     /// Store an `i32` on the buffer.
     pub fn int32(&mut self, int32: i32) -> &mut Encoder {
-        self.uint32(unsafe { mem::transmute(int32) })
+        write_bytes!(self.data, int32);
+
+        self
     }
 
     #[inline]
     /// Store an `i32` on the buffer.
     pub fn int64(&mut self, int64: i64) -> &mut Encoder {
-        self.uint64(unsafe { mem::transmute(int64) })
+        write_bytes!(self.data, int64);
+
+        self
     }
 
     /// Store a `float32` on the buffer.
@@ -291,9 +312,9 @@ impl Encoder {
     }
 
     /// Finish encoding, resets the encoder
+    #[inline]
     pub fn end(&mut self) -> Result<Vec<u8>, Error> {
-        let error = self.last_error.take();
-        match error {
+        match self.last_error.take() {
             Some(error) => Err(error),
             None        => {
                 self.bool_index = std::usize::MAX;
