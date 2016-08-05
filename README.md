@@ -22,12 +22,10 @@ intermediate state of the encoder, e.g.:
 ```rust
 use bitsparrow::Encoder;
 
-let encoder = Encoder::new()
-.uint8(100);
+let encoder = Encoder::new();
+encoder.uint8(100);
 
-/*
-* Many codes here
-*/
+/* ... */
 
 let buffer = encoder.string("Foo").end();
 
