@@ -50,6 +50,25 @@ encoded. Calling the `end` method is optional - it will return
 `true` if you have read the entire buffer, ensuring the entire
 buffer has been read.
 
+## Performance
+
+All primitive number types are encoded and decoded using straight
+low level memory copying and type transmutations. Even on
+little-endian hardware (the encoded data is always big-endian) the
+cost of encoding/decoding is virtually none:
+
+```
+test allocate_8 ... bench:          26 ns/iter (+/- 4)
+test decode_f64 ... bench:           0 ns/iter (+/- 0)
+test decode_u64 ... bench:           0 ns/iter (+/- 0)
+test encode_f64 ... bench:          26 ns/iter (+/- 6)
+test encode_u64 ... bench:          26 ns/iter (+/- 3)
+```
+
+Encoding benchmark includes allocating 8 bytes on the heap, the
+`allocate_8` just creates `Vec::with_capacity(8)` to demonstrate that
+the actual encoding process is very, very cheap.
+
 ## The MIT License (MIT)
 
 Copyright (c) 2016 BitSparrow
