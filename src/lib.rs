@@ -11,8 +11,7 @@
 //! let buffer = Encoder::new()
 //!              .uint8(100)
 //!              .string("Foo")
-//!              .end()
-//!              .unwrap();
+//!              .end();
 //!
 //! assert_eq!(buffer, &[0x64,0x03,0x46,0x6f,0x6f])
 //! ```
@@ -31,9 +30,7 @@
 //!  * Many codes here
 //!  */
 //!
-//! let buffer = encoder.string("Foo")
-//!              .end()
-//!              .unwrap();
+//! let buffer = encoder.string("Foo").end();
 //!
 //! assert_eq!(buffer, &[0x64_u8,0x03,0x46,0x6f,0x6f]);
 //! ```
@@ -65,9 +62,6 @@ use std::{ mem, fmt, error, str, ptr };
 /// Simple error type returned either by the `Decoder` or `Encoder`
 #[derive(Debug)]
 pub enum Error {
-    SizeValueTooLarge,
-    BytesTooLong,
-    StringTooLong,
     Utf8Encoding,
     ReadingOutOfBounds,
 }
@@ -75,9 +69,6 @@ pub enum Error {
 impl error::Error for Error {
     fn description(&self) -> &str {
         match *self {
-            Error::SizeValueTooLarge  => "[size] value is too large",
-            Error::BytesTooLong       => "[bytes] value is too long",
-            Error::StringTooLong      => "[string] value is too long",
             Error::Utf8Encoding       => "Couldn't decode UTF-8 string",
             Error::ReadingOutOfBounds => "Attempted to read out of bounds",
         }
@@ -90,13 +81,24 @@ impl fmt::Display for Error {
     }
 }
 
+static SIZE_MASKS: [u8; 9] = [
+    0b00000000,
+    0b10000000,
+    0b11000000,
+    0b11100000,
+    0b11110000,
+    0b11111000,
+    0b11111100,
+    0b11111110,
+    0b11111111
+];
+
 /// Encoder takes in typed data and produces a binary buffer
 /// represented as `Vec<u8>`.
 pub struct Encoder {
     data: Vec<u8>,
     bool_index: usize,
     bool_shift: u8,
-    last_error: Option<Error>,
 }
 
 macro_rules! write_bytes {
@@ -126,7 +128,6 @@ impl Encoder {
             data: Vec::new(),
             bool_index: std::usize::MAX,
             bool_shift: 0,
-            last_error: None,
         }
     }
 
@@ -137,7 +138,6 @@ impl Encoder {
             data: Vec::with_capacity(capacity),
             bool_index: std::usize::MAX,
             bool_shift: 0,
-            last_error: None,
         }
     }
 
@@ -233,8 +233,7 @@ impl Encoder {
     ///              .bool(true)
     ///              .bool(true)
     ///              .bool(true)
-    ///              .end()
-    ///              .unwrap();
+    ///              .end();
     ///
     /// // booleans are stacked as bits on a single byte, right to left.
     /// assert_eq!(buffer, &[0b11100001]);
@@ -265,33 +264,32 @@ impl Encoder {
     /// on [the homepage](http://bitsparrow.io).
     #[inline]
     pub fn size(&mut self, size: usize) -> &mut Encoder {
-        if size > 0x3FFFFFFF {
-            self.last_error = Some(Error::SizeValueTooLarge);
-            return self;
-        }
-
-        // can fit on 7 bits
-        if size < 0x80 {
+        if size < 128 {
             return self.uint8(size as u8);
         }
 
-        // can fit on 14 bits
-        if size < 0x4000 {
-            return self.uint16((size as u16) | 0x8000);
-        }
+        let mut size = size as u64;
 
-        // use up to 30 bits
-        self.uint32((size as u32) | 0xC0000000)
+        let lead = size.leading_zeros() as usize;
+        let bytes = if lead == 0 { 9 } else { 9 - (lead - 1) / 7 };
+
+        let mut buf: [u8; 9] = unsafe { mem::uninitialized() };
+
+        for i in (1 .. bytes).rev() {
+            buf[i] = size as u8;
+            size >>= 8;
+        }
+        buf[0] = (size as u8) | SIZE_MASKS[bytes - 1];
+
+        self.data.extend_from_slice(&buf[0 .. bytes]);
+
+        self
     }
 
     /// Store an arbitary collection of bytes represented as `&[u8]`,
     /// easy to use by dereferencing `Vec<u8>` with `&`.
     #[inline]
     pub fn bytes(&mut self, bytes: &[u8]) -> &mut Encoder {
-        if bytes.len() > 0x3FFFFFFF {
-            self.last_error = Some(Error::BytesTooLong);
-            return self;
-        }
         self.size(bytes.len());
         self.data.extend_from_slice(bytes);
 
@@ -301,10 +299,6 @@ impl Encoder {
     /// Store an arbitrary UTF-8 Rust string on the buffer.
     #[inline]
     pub fn string(&mut self, string: &str) -> &mut Encoder {
-        if string.len() > 0x3FFFFFFF {
-            self.last_error = Some(Error::StringTooLong);
-            return self;
-        }
         self.size(string.len());
         self.data.extend_from_slice(string.as_bytes());
 
@@ -313,16 +307,11 @@ impl Encoder {
 
     /// Finish encoding, resets the encoder
     #[inline]
-    pub fn end(&mut self) -> Result<Vec<u8>, Error> {
-        match self.last_error.take() {
-            Some(error) => Err(error),
-            None        => {
-                self.bool_index = std::usize::MAX;
-                self.bool_shift = 0;
+    pub fn end(&mut self) -> Vec<u8> {
+        self.bool_index = std::usize::MAX;
+        self.bool_shift = 0;
 
-                Ok(mem::replace(&mut self.data, Vec::new()))
-            }
-        }
+        mem::replace(&mut self.data, Vec::new())
     }
 }
 
@@ -516,21 +505,15 @@ impl<'a> Decoder<'a> {
             return Ok(high as usize);
         }
 
-        let sig = high >> 6;
-        // remove signature from the first byte
-        let size = (high as usize) & 63; /* 00111111 */
+        let mut ext_bytes = (!high).leading_zeros() as usize;
+        let mut size = (high ^ SIZE_MASKS[ext_bytes]) as usize;
 
-        // 2 bytes (signature is 10)
-        if sig == 2 {
-            return Ok(size << 8 | try!(self.uint8()) as usize);
+        while ext_bytes != 0 {
+            ext_bytes -= 1;
+            size = (size << 8) | try!(self.uint8()) as usize;
         }
 
-        Ok(
-            size << 24                          |
-            (try!(self.uint8()) as usize) << 16 |
-            (try!(self.uint8()) as usize) << 8  |
-            (try!(self.uint8()) as usize)
-        )
+        Ok(size)
     }
 
     /// Read an arbitary sized binary data from the buffer and

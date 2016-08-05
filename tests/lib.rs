@@ -76,7 +76,7 @@ fn eat_own_dog_food() {
         0x77,0x6e,0x20,0x73,0x75,0x62,0x66,0x61,0x6d,0x69,0x6c,0x79,0x20,
         0x77,0x69,0x74,0x68,0x69,0x6e,0x20,0x50,0x61,0x73,0x73,0x65,0x72,
         0x69,0x64,0x61,0x65,0x2e,0x5b,0x35,0x5d,0x06,0x01,0x02,0x03,0x04,
-        0x05,0x06,0x64,0xa7,0x10,0xc0,0x0f,0x42,0x40,0xff,0xff,0xff,0xff,
+        0x05,0x06,0x64,0xa7,0x10,0xcf,0x42,0x40,0xf0,0x3f,0xff,0xff,0xff,
         0x40,0x49,0x0f,0xdb,0x40,0x09,0x21,0xfb,0x54,0x44,0x2d,0x18
     ];
     let long_text = "Sparrow /ˈsper.oʊ/\n\nUnder the classification used in \
@@ -113,8 +113,7 @@ fn eat_own_dog_food() {
         .size(1073741823)
         .float32(PI as f32)
         .float64(PI)
-        .end()
-        .unwrap();
+        .end();
 
     assert_eq!(buffer, EXPECTED);
 
@@ -141,7 +140,7 @@ macro_rules! test_type {
     ($fnname:ident, $t:ident, $v:expr) => (
         #[test]
         fn $fnname() {
-            let buffer = Encoder::new().$t($v).end().unwrap();
+            let buffer = Encoder::new().$t($v).end();
             let mut decoder = Decoder::new(&buffer);
             assert_eq!(decoder.$t().unwrap(), $v);
             assert!(decoder.end());
@@ -152,7 +151,15 @@ macro_rules! test_type {
 test_type!(bool_true, bool, true);
 test_type!(bool_false, bool, false);
 test_type!(size_zero, size, 0_usize);
-test_type!(size_max, size, 1073741823_usize); // max here is different from `usize::MAX`
+test_type!(size_1, size, 0x7F_usize);
+test_type!(size_2, size, 0x3FFF_usize);
+test_type!(size_3, size, 0x1FFFFF_usize);
+test_type!(size_4, size, 0xFFFFFFFF_usize);
+test_type!(size_5, size, 0x7FFFFFFFFF_usize);
+test_type!(size_6, size, 0x3FFFFFFFFFFF_usize);
+test_type!(size_7, size, 0x1FFFFFFFFFFFFF_usize);
+test_type!(size_8, size, 0xFFFFFFFFFFFFFFFF_usize);
+test_type!(size_max, size, ::std::usize::MAX); // max here is different from `usize::MAX`
 test_type!(uint8_zero, uint8, 0_u8);
 test_type!(uint8_max, uint8, ::std::u8::MAX);
 test_type!(uint16_zero, uint16, 0_u16);
@@ -196,7 +203,7 @@ fn stacking_bools() {
         .bool(false)
         .uint8(10)
         .bool(true)
-        .end().unwrap();
+        .end();
 
     assert_eq!(buffer.len(), 4);
 
