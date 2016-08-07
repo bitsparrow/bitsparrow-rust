@@ -160,7 +160,7 @@ test_type!(size_6, size, 0x03FFFFFFFFFF_usize);
 test_type!(size_7, size, 0x01FFFFFFFFFFFF_usize);
 test_type!(size_8, size, 0x00FFFFFFFFFFFFFF_usize);
 test_type!(size_9, size, 0xFFFFFFFFFFFFFFFF_usize);
-test_type!(size_max, size, ::std::usize::MAX); // max here is different from `usize::MAX`
+test_type!(size_max, size, ::std::usize::MAX);
 test_type!(uint8_zero, uint8, 0_u8);
 test_type!(uint8_max, uint8, ::std::u8::MAX);
 test_type!(uint16_zero, uint16, 0_u16);
