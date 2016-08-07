@@ -1,6 +1,10 @@
 # BitSparrow in Rust
 
-**[Homepage](http://bitsparrow.io/) - [API Documentation](http://bitsparrow.io/doc/bitsparrow/)**
+![](https://api.travis-ci.org/bitsparrow/bitsparrow-rust.svg)
+
+**[Homepage](http://bitsparrow.io/) -**
+**[API Documentation](http://bitsparrow.io/doc/bitsparrow/) -**
+**[Cargo](https://crates.io/crates/bitsparrow)**
 
 ## Encoding
 
@@ -8,12 +12,11 @@
 use bitsparrow::Encoder;
 
 let buffer = Encoder::new()
-.uint8(100)
-.string("Foo")
-.end()
-.unwrap();
+             .uint8(100)
+             .string("Foo")
+             .end();
 
-assert_eq!(buffer, vec![0x64,0x03,0x46,0x6f,0x6f])
+assert_eq!(buffer, &[0x64,0x03,0x46,0x6f,0x6f])
 ```
 
 Each method on the `Encoder` will consume the instance of the
@@ -23,30 +26,22 @@ intermediate state of the encoder, e.g.:
 ```rust
 use bitsparrow::Encoder;
 
-let encoder = Encoder::new()
-.uint8(100);
+let encoder = Encoder::new();
+encoder.uint8(100);
 
-/*
-* Many codes here
-*/
+/* ... */
 
-let buffer = encoder.string("Foo")
-.end()
-.unwrap();
+let buffer = encoder.string("Foo").end();
 
-assert_eq!(buffer, vec![0x64,0x03,0x46,0x6f,0x6f]);
+assert_eq!(buffer, &[0x64,0x03,0x46,0x6f,0x6f]);
 ```
-
-To make the monad chain feasible, Encoder will internally
-store the last error (if any) that occures during the chain,
-and return in on the `Result` of the `end` method.
 
 ## Decoding
 
 ```rust
 use bitsparrow::Decoder;
 
-let buffer: Vec<u8> = vec![0x64,0x03,0x46,0x6f,0x6f];
+let buffer = &[0x64,0x03,0x46,0x6f,0x6f];
 let mut decoder = Decoder::new(buffer);
 
 assert_eq!(100u8, decoder.uint8().unwrap());
@@ -54,11 +49,29 @@ assert_eq!("Foo", decoder.string().unwrap());
 assert_eq!(true, decoder.end());
 ```
 
-Decoder consumes the buffer and allows you to retrieve the
-values in order they were encoded. Calling the `end` method
-is optional, it will return true if you have read the entire
-buffer, which can be handy if you are reading multiple
-messages stacked on a single buffer.
+Decoder allows you to retrieve the values in order they were
+encoded. Calling the `end` method is optional - it will return
+`true` if you have read the entire buffer, ensuring the entire
+buffer has been read.
+
+## Performance
+
+All primitive number types are encoded and decoded using straight
+low level memory copying and type transmutations. Even on
+little-endian hardware (the encoded data is always big-endian) the
+cost of encoding/decoding is virtually none:
+
+```
+test allocate_8 ... bench:          26 ns/iter (+/- 4)
+test decode_f64 ... bench:           0 ns/iter (+/- 0)
+test decode_u64 ... bench:           0 ns/iter (+/- 0)
+test encode_f64 ... bench:          26 ns/iter (+/- 6)
+test encode_u64 ... bench:          26 ns/iter (+/- 3)
+```
+
+Encoding benchmark includes allocating 8 bytes on the heap, the
+`allocate_8` just creates `Vec::with_capacity(8)` to demonstrate that
+the actual encoding process is very, very cheap.
 
 ## The MIT License (MIT)
 
