@@ -1,6 +1,10 @@
 # BitSparrow in Rust
 
-**[Homepage](http://bitsparrow.io/) - [API Documentation](http://bitsparrow.io/doc/bitsparrow/)**
+![](https://api.travis-ci.org/bitsparrow/bitsparrow-rust.svg)
+
+**[Homepage](http://bitsparrow.io/) -**
+**[API Documentation](http://bitsparrow.io/doc/bitsparrow/) -**
+**[Cargo](https://crates.io/crates/bitsparrow)**
 
 ## Encoding
 
@@ -8,9 +12,9 @@
 use bitsparrow::Encoder;
 
 let buffer = Encoder::new()
-.uint8(100)
-.string("Foo")
-.end();
+             .uint8(100)
+             .string("Foo")
+             .end();
 
 assert_eq!(buffer, &[0x64,0x03,0x46,0x6f,0x6f])
 ```
