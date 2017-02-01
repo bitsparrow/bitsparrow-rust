@@ -45,10 +45,8 @@ fn encode_str(b: &mut Bencher) {
 
 #[bench]
 fn encode_complex_slice(b: &mut Bencher) {
-    let foo: &[f32] = &[3.14, 2.15, 1.16];
-
     b.iter(|| {
-        Encoder::encode(foo);
+        Encoder::encode(&[3.14f32, 2.15, 1.16])
     })
 }
 

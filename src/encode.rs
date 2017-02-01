@@ -203,6 +203,7 @@ impl Encoder {
         self
     }
 
+    /// Finish encoding, obtain the buffer and reset the encoder.
     #[inline(always)]
     pub fn end(&mut self) -> Vec<u8> {
         self.bool_index = ::std::usize::MAX;
@@ -373,6 +374,13 @@ macro_rules! impl_array {
                 #[inline(always)]
                 fn encode(&self, e: &mut Encoder) {
                     BitEncodable::encode(AsRef::<[u8]>::as_ref(self), e);
+                }
+            }
+
+            impl<'a, B: BitEncodable> BitEncodable for &'a [B; $size] {
+                #[inline(always)]
+                fn encode(&self, e: &mut Encoder) {
+                    BitEncodable::encode(AsRef::<[B]>::as_ref(self), e);
                 }
             }
         )*

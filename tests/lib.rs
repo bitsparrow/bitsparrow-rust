@@ -269,3 +269,15 @@ fn stacking_bools() {
     assert_eq!(decoder.bool().unwrap(), true);
     assert_eq!(decoder.end(), true);
 }
+
+#[test]
+fn encode_complex_slice() {
+    let buffer = Encoder::encode(&[3.14f32, 2.15, 1.16]);
+
+    let mut decoder = Decoder::new(&buffer);
+    assert_eq!(decoder.size().unwrap(), 3);
+    assert_eq!(decoder.float32().unwrap(), 3.14);
+    assert_eq!(decoder.float32().unwrap(), 2.15);
+    assert_eq!(decoder.float32().unwrap(), 1.16);
+    assert_eq!(decoder.end(), true);
+}
