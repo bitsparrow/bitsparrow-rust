@@ -44,6 +44,15 @@ fn encode_str(b: &mut Bencher) {
 }
 
 #[bench]
+fn encode_complex_slice(b: &mut Bencher) {
+    let foo: &[f32] = &[3.14, 2.15, 1.16];
+
+    b.iter(|| {
+        Encoder::encode(foo);
+    })
+}
+
+#[bench]
 fn decode_u64(b: &mut Bencher) {
     let buffer = Encoder::encode(::std::u64::MAX);
 

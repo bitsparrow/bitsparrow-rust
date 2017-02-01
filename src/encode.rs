@@ -19,13 +19,18 @@ pub struct Encoder {
 }
 
 pub trait BitEncodable {
-    #[inline]
-    fn encode(self, &mut Encoder);
+    #[inline(always)]
+    fn encode(&self, &mut Encoder);
+
+    #[inline(always)]
+    fn size_hint() -> usize {
+        1
+    }
 }
 
 impl Encoder {
     /// Create a new instance of the `Encoder`.
-    #[inline]
+    #[inline(always)]
     pub fn new() -> Encoder {
         Encoder {
             data: Vec::new()
@@ -33,32 +38,30 @@ impl Encoder {
     }
 
     /// Create a new instance of the `Encoder` with a preallocated buffer capacity.
-    #[inline]
+    #[inline(always)]
     pub fn with_capacity(capacity: usize) -> Encoder {
         Encoder {
             data: Vec::with_capacity(capacity)
         }
     }
 
-    #[inline]
     pub fn encode<E: BitEncodable>(item: E) -> Vec<u8> {
         let mut e = Encoder::new();
         item.encode(&mut e);
         e.end()
     }
 
-    #[inline]
     pub fn push<E: BitEncodable>(&mut self, item: E) -> &mut Self {
         item.encode(self);
         self
     }
 
-    #[inline]
+    #[inline(always)]
     pub fn end(self) -> Vec<u8> {
         self.data
     }
 
-    #[inline]
+    #[inline(always)]
     fn size(&mut self, size: usize, item: usize) {
         if size < 128 {
             // Encoding size means data will follow, so it makes sense to reserve
@@ -88,24 +91,24 @@ impl Encoder {
 }
 
 // impl BitEncodable for u8 {
-//     #[inline]
-//     fn encode(self, e: &mut Encoder) {
-//         e.data.push(self);
+//     #[inline(always)]
+//     fn encode(&self, e: &mut Encoder) {
+//         e.data.push(*self);
 //     }
 // }
 
 impl BitEncodable for i8 {
-    #[inline]
-    fn encode(self, e: &mut Encoder) {
-        e.data.push(self as u8);
+    #[inline(always)]
+    fn encode(&self, e: &mut Encoder) {
+        e.data.push(*self as u8);
     }
 }
 
 macro_rules! impl_encodable {
     ($t:ty) => {
         impl BitEncodable for $t {
-            #[inline]
-            fn encode(self, e: &mut Encoder) {
+            #[inline(always)]
+            fn encode(&self, e: &mut Encoder) {
                 unsafe {
                     let ptr: *const u8 = mem::transmute(&self.to_be());
 
@@ -120,6 +123,11 @@ macro_rules! impl_encodable {
                     );
                 }
             }
+
+            #[inline(always)]
+            fn size_hint() -> usize {
+                mem::size_of::<$t>()
+            }
         }
     }
 }
@@ -132,16 +140,16 @@ impl_encodable!(i32);
 impl_encodable!(i64);
 
 impl BitEncodable for f32 {
-    #[inline]
-    fn encode(self, e: &mut Encoder) {
-        BitEncodable::encode(unsafe { mem::transmute::<f32, u32>(self) }, e);
+    #[inline(always)]
+    fn encode(&self, e: &mut Encoder) {
+        BitEncodable::encode(&unsafe { mem::transmute::<f32, u32>(*self) }, e);
     }
 }
 
 impl BitEncodable for f64 {
-    #[inline]
-    fn encode(self, e: &mut Encoder) {
-        BitEncodable::encode(unsafe { mem::transmute::<f64, u64>(self) }, e);
+    #[inline(always)]
+    fn encode(&self, e: &mut Encoder) {
+        BitEncodable::encode(&unsafe { mem::transmute::<f64, u64>(*self) }, e);
     }
 }
 
@@ -153,22 +161,22 @@ impl BitEncodable for usize {
     /// number type such as u32 could be an overkill if all you want to send is
     /// `"Foo"`. Detailed explanation on how BitSparrow stores `size` can be found
     /// on [the homepage](http://bitsparrow.io).
-    #[inline]
-    fn encode(self, e: &mut Encoder) {
-        e.size(self, 0);
+    #[inline(always)]
+    fn encode(&self, e: &mut Encoder) {
+        e.size(*self, 0);
     }
 }
 
 impl BitEncodable for bool {
-    #[inline]
-    fn encode(self, e: &mut Encoder) {
-        e.data.push(self as u8);
+    #[inline(always)]
+    fn encode(&self, e: &mut Encoder) {
+        e.data.push(*self as u8);
     }
 }
 
-impl<'a> BitEncodable for &'a [u8] {
+impl BitEncodable for [u8] {
     #[inline(always)]
-    fn encode(self, e: &mut Encoder) {
+    fn encode(&self, e: &mut Encoder) {
         e.size(self.len(), 1);
 
         unsafe {
@@ -188,33 +196,80 @@ impl<'a> BitEncodable for &'a [u8] {
     }
 }
 
-// impl<'a, B: BitEncodable> BitEncodable for &'a B {
-//     #[inline(always)]
-//     fn encode(self, e: &mut Encoder) {
-//         self.encode(e);
-//     }
-// }
-
-// impl<'a, B: BitEncodable> BitEncodable for &'a [B] {
-//     #[inline(always)]
-//     fn encode(self, e: &mut Encoder) {
-//         e.size(self.len(), 1);
-//         for item in self {
-//             BitEncodable::encode(item, e);
-//         }
-//     }
-// }
-
-impl<'a, T: AsRef<[u8]>> BitEncodable for &'a T {
+impl<'a> BitEncodable for &'a [u8] {
     #[inline(always)]
-    fn encode(self, e: &mut Encoder) {
-        BitEncodable::encode(self.as_ref(), e);
+    fn encode(&self, e: &mut Encoder) {
+        BitEncodable::encode(*self, e);
+    }
+}
+
+macro_rules! impl_array {
+    ($( $size:expr ),*) => {
+        $(
+            impl<'a> BitEncodable for &'a [u8; $size] {
+                #[inline(always)]
+                fn encode(&self, e: &mut Encoder) {
+                    BitEncodable::encode(AsRef::<[u8]>::as_ref(self), e);
+                }
+            }
+        )*
+    }
+}
+
+impl_array!(
+     0,
+     1,  2,  3,  4,  5,  6,  7,  8,  9, 10, 11, 12, 13, 14, 15, 16,
+    17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32
+);
+
+impl<'a> BitEncodable for &'a Vec<u8> {
+    #[inline(always)]
+    fn encode(&self, e: &mut Encoder) {
+        BitEncodable::encode(AsRef::<[u8]>::as_ref(*self), e);
     }
 }
 
 impl<'a> BitEncodable for &'a str {
     #[inline(always)]
-    fn encode(self, e: &mut Encoder) {
+    fn encode(&self, e: &mut Encoder) {
         BitEncodable::encode(self.as_bytes(), e);
+    }
+}
+
+impl BitEncodable for String {
+    #[inline(always)]
+    fn encode(&self, e: &mut Encoder) {
+        BitEncodable::encode(self.as_bytes(), e);
+    }
+}
+
+impl<'a> BitEncodable for &'a String {
+    #[inline(always)]
+    fn encode(&self, e: &mut Encoder) {
+        BitEncodable::encode(self.as_bytes(), e);
+    }
+}
+
+impl<B: BitEncodable> BitEncodable for [B] {
+    #[inline(always)]
+    fn encode(&self, e: &mut Encoder) {
+        e.size(self.len(), B::size_hint());
+        for item in self {
+            BitEncodable::encode(item, e);
+        }
+    }
+}
+
+impl<'a, B: BitEncodable> BitEncodable for &'a [B] {
+    #[inline(always)]
+    fn encode(&self, e: &mut Encoder) {
+        BitEncodable::encode(*self, e);
+    }
+}
+
+impl<'a, B: BitEncodable> BitEncodable for &'a Vec<B> {
+    #[inline(always)]
+    fn encode(&self, e: &mut Encoder) {
+        BitEncodable::encode(AsRef::<[B]>::as_ref(*self), e);
     }
 }
