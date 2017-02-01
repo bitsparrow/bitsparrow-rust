@@ -53,6 +53,10 @@
 //! `true` if you have read the entire buffer, ensuring the entire
 //! buffer has been read.
 
+mod encode;
+
+pub use encode::Encoder;
+
 use std::{ mem, fmt, error, str, ptr };
 
 /// Simple error type returned either by the `Decoder` or `Encoder`
@@ -89,229 +93,6 @@ static SIZE_MASKS: [u8; 9] = [
     0b11111111
 ];
 
-/// Encoder takes in typed data and produces a binary buffer
-/// represented as `Vec<u8>`.
-pub struct Encoder {
-    data: Vec<u8>,
-    bool_index: usize,
-    bool_shift: u8,
-}
-
-macro_rules! write_bytes {
-    ($data:expr, $value:ident) => ({
-        unsafe {
-            let size = mem::size_of_val(&$value);
-            let ptr: *const u8 = mem::transmute(&$value.to_be());
-
-            let len = $data.len();
-            $data.reserve(size);
-            $data.set_len(len + size);
-
-            ptr::copy_nonoverlapping(
-                ptr,
-                $data.as_mut_ptr().offset(len as isize),
-                size
-            );
-        }
-    })
-}
-
-impl Encoder {
-    /// Create a new instance of the `Encoder`.
-    #[inline]
-    pub fn new() -> Encoder {
-        Encoder {
-            data: Vec::new(),
-            bool_index: std::usize::MAX,
-            bool_shift: 0,
-        }
-    }
-
-    /// Create a new instance of the `Encoder` with a preallocated buffer capacity.
-    #[inline]
-    pub fn with_capacity(capacity: usize) -> Encoder {
-        Encoder {
-            data: Vec::with_capacity(capacity),
-            bool_index: std::usize::MAX,
-            bool_shift: 0,
-        }
-    }
-
-    /// Store a `u8` on the buffer.
-    #[inline]
-    pub fn uint8(&mut self, uint8: u8) -> &mut Encoder {
-        self.data.push(uint8);
-
-        self
-    }
-
-    /// Store a 'u16' on the buffer.
-    #[inline]
-    pub fn uint16(&mut self, uint16: u16) -> &mut Encoder {
-        write_bytes!(self.data, uint16);
-
-        self
-    }
-
-    /// Store a 'u32' on the buffer.
-    #[inline]
-    pub fn uint32(&mut self, uint32: u32) -> &mut Encoder {
-        write_bytes!(self.data, uint32);
-
-        self
-    }
-
-    /// Store a 'u64' on the buffer.
-    #[inline]
-    pub fn uint64(&mut self, uint64: u64) -> &mut Encoder {
-        write_bytes!(self.data, uint64);
-
-        self
-    }
-
-    /// Store an `i8` on the buffer.
-    #[inline]
-    pub fn int8(&mut self, int8: i8) -> &mut Encoder {
-        self.data.push(int8 as u8);
-
-        self
-    }
-
-    /// Store an `i16` on the buffer.
-    #[inline]
-    pub fn int16(&mut self, int16: i16) -> &mut Encoder {
-        write_bytes!(self.data, int16);
-
-        self
-    }
-
-    #[inline]
-    /// Store an `i32` on the buffer.
-    pub fn int32(&mut self, int32: i32) -> &mut Encoder {
-        write_bytes!(self.data, int32);
-
-        self
-    }
-
-    #[inline]
-    /// Store an `i32` on the buffer.
-    pub fn int64(&mut self, int64: i64) -> &mut Encoder {
-        write_bytes!(self.data, int64);
-
-        self
-    }
-
-    /// Store a `float32` on the buffer.
-    #[inline]
-    pub fn float32(&mut self, float32: f32) -> &mut Encoder {
-        self.uint32(unsafe { mem::transmute(float32) })
-    }
-
-    /// Store a `float64` on the buffer.
-    #[inline]
-    pub fn float64(&mut self, float64: f64) -> &mut Encoder {
-        self.uint64(unsafe { mem::transmute(float64) })
-    }
-
-    /// Store a `bool` on the buffer. Calling `bool` multiple times
-    /// in a row will attempt to store the information on a single
-    /// byte.
-    ///
-    /// ```
-    /// use bitsparrow::Encoder;
-    ///
-    /// let buffer = Encoder::new()
-    ///              .bool(true)
-    ///              .bool(false)
-    ///              .bool(false)
-    ///              .bool(false)
-    ///              .bool(false)
-    ///              .bool(true)
-    ///              .bool(true)
-    ///              .bool(true)
-    ///              .end();
-    ///
-    /// // booleans are stacked as bits on a single byte, right to left.
-    /// assert_eq!(buffer, &[0b11100001]);
-    /// ```
-    #[inline]
-    pub fn bool(&mut self, bool: bool) -> &mut Encoder {
-        let bool_bit: u8 = if bool { 1 } else { 0 };
-        let index = self.data.len();
-
-        if self.bool_index == index && self.bool_shift < 7 {
-            self.bool_shift += 1;
-            self.data[index - 1] = self.data[index - 1] | bool_bit << self.bool_shift;
-            return self;
-        }
-
-        self.bool_index = index + 1;
-        self.bool_shift = 0;
-
-        self.uint8(bool_bit)
-    }
-
-    /// Store a `usize` on the buffer. This will use a variable amount of bytes
-    /// depending on the value of `usize`, making it a very powerful and flexible
-    /// type to send around. BitSparrow uses `size` internally to prefix `string`
-    /// and `bytes` as those can have an arbitrary length, and using a large
-    /// number type such as u32 could be an overkill if all you want to send is
-    /// `"Foo"`. Detailed explanation on how BitSparrow stores `size` can be found
-    /// on [the homepage](http://bitsparrow.io).
-    #[inline]
-    pub fn size(&mut self, size: usize) -> &mut Encoder {
-        if size < 128 {
-            return self.uint8(size as u8);
-        }
-
-        let mut size = size as u64;
-
-        let lead = size.leading_zeros() as usize;
-        let bytes = if lead == 0 { 9 } else { 9 - (lead - 1) / 7 };
-
-        let mut buf: [u8; 9] = unsafe { mem::uninitialized() };
-
-        for i in (1 .. bytes).rev() {
-            buf[i] = size as u8;
-            size >>= 8;
-        }
-        buf[0] = (size as u8) | SIZE_MASKS[bytes - 1];
-
-        self.data.extend_from_slice(&buf[0 .. bytes]);
-
-        self
-    }
-
-    /// Store an arbitary collection of bytes represented as `&[u8]`,
-    /// easy to use by dereferencing `Vec<u8>` with `&`.
-    #[inline]
-    pub fn bytes(&mut self, bytes: &[u8]) -> &mut Encoder {
-        self.size(bytes.len());
-        self.data.extend_from_slice(bytes);
-
-        self
-    }
-
-    /// Store an arbitrary UTF-8 Rust string on the buffer.
-    #[inline]
-    pub fn string(&mut self, string: &str) -> &mut Encoder {
-        self.size(string.len());
-        self.data.extend_from_slice(string.as_bytes());
-
-        self
-    }
-
-    /// Finish encoding, obtain the buffer and reset the encoder.
-    #[inline]
-    pub fn end(&mut self) -> Vec<u8> {
-        self.bool_index = std::usize::MAX;
-        self.bool_shift = 0;
-
-        mem::replace(&mut self.data, Vec::new())
-    }
-}
-
-
 /// Decoder reads from a binary slice buffer (`&[u8]`) and exposes
 /// methods to read BitSparrow types from it in the same order they
 /// were encoded by the `Encoder`.
@@ -332,7 +113,7 @@ macro_rules! read_bytes {
 
         unsafe {
             let mut value: $t = mem::uninitialized();
-            let ptr: *mut u8 = mem::transmute(&mut value);
+            let ptr = &mut value as *mut $t as *mut u8;
 
             ptr::copy_nonoverlapping(
                 $decoder.data.as_ptr().offset($decoder.index as isize),
