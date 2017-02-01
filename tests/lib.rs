@@ -140,7 +140,9 @@ macro_rules! test_type {
     ($fnname:ident, $t:ident, $v:expr) => (
         #[test]
         fn $fnname() {
-            let buffer = Encoder::new().$t($v).end();
+            let mut encoder = Encoder::new();
+            encoder.$t($v);
+            let buffer = encoder.end();
             let mut decoder = Decoder::new(&buffer);
             assert_eq!(decoder.$t().unwrap(), $v);
             assert!(decoder.end());
@@ -192,47 +194,47 @@ test_type!(bytes, bytes, &[   0,  10,  20,  30,  40,  50,  60,  70,  80,  90,
 
 #[test]
 fn size_check_len_1() {
-    assert_eq!(Encoder::new().size(0x7F).end().len(), 1);
+    assert_eq!(Encoder::encode(0x7Fusize).len(), 1);
 }
 
 #[test]
 fn size_check_len_2() {
-    assert_eq!(Encoder::new().size(0x3FFF).end().len(), 2);
+    assert_eq!(Encoder::encode(0x3FFFusize).len(), 2);
 }
 
 #[test]
 fn size_check_len_3() {
-    assert_eq!(Encoder::new().size(0x1FFFFF).end().len(), 3);
+    assert_eq!(Encoder::encode(0x1FFFFFusize).len(), 3);
 }
 
 #[test]
 fn size_check_len_4() {
-    assert_eq!(Encoder::new().size(0x0FFFFFFF).end().len(), 4);
+    assert_eq!(Encoder::encode(0x0FFFFFFFusize).len(), 4);
 }
 
 #[test]
 fn size_check_len_5() {
-    assert_eq!(Encoder::new().size(0x07FFFFFFFF).end().len(), 5);
+    assert_eq!(Encoder::encode(0x07FFFFFFFFusize).len(), 5);
 }
 
 #[test]
 fn size_check_len_6() {
-    assert_eq!(Encoder::new().size(0x03FFFFFFFFFF).end().len(), 6);
+    assert_eq!(Encoder::encode(0x03FFFFFFFFFFusize).len(), 6);
 }
 
 #[test]
 fn size_check_len_7() {
-    assert_eq!(Encoder::new().size(0x01FFFFFFFFFFFF).end().len(), 7);
+    assert_eq!(Encoder::encode(0x01FFFFFFFFFFFFusize).len(), 7);
 }
 
 #[test]
 fn size_check_len_8() {
-    assert_eq!(Encoder::new().size(0x00FFFFFFFFFFFFFF).end().len(), 8);
+    assert_eq!(Encoder::encode(0x00FFFFFFFFFFFFFFusize).len(), 8);
 }
 
 #[test]
 fn size_check_len_9() {
-    assert_eq!(Encoder::new().size(0xFFFFFFFFFFFFFFFF).end().len(), 9);
+    assert_eq!(Encoder::encode(0xFFFFFFFFFFFFFFFFusize).len(), 9);
 }
 
 #[test]
