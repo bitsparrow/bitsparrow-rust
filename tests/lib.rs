@@ -140,9 +140,7 @@ macro_rules! test_type {
     ($fnname:ident, $t:ident, $v:expr) => (
         #[test]
         fn $fnname() {
-            let mut encoder = Encoder::new();
-            encoder.$t($v);
-            let buffer = encoder.end();
+            let buffer = Encoder::new().$t($v).end();
             let mut decoder = Decoder::new(&buffer);
             assert_eq!(decoder.$t().unwrap(), $v);
             assert!(decoder.end());
@@ -271,6 +269,31 @@ fn stacking_bools() {
 }
 
 #[test]
+fn encode_tuple() {
+    let buffer = Encoder::encode(("foo", 3.14f32, true));
+
+    let mut decoder = Decoder::new(&buffer);
+
+    assert_eq!(decoder.string().unwrap(), "foo");
+    assert_eq!(decoder.float32().unwrap(), 3.14);
+    assert_eq!(decoder.bool().unwrap(), true);
+    assert_eq!(decoder.end(), true);
+}
+
+#[test]
+fn decode_tuple() {
+    let buffer = Encoder::new()
+                        .string("foo")
+                        .float32(3.14)
+                        .bool(true)
+                        .end();
+
+    let tuple: (String, f32, bool) = Decoder::decode(&buffer).unwrap();
+
+    assert_eq!(tuple, ("foo".into(), 3.14, true));
+}
+
+#[test]
 fn encode_complex_slice() {
     let buffer = Encoder::encode(&[3.14f32, 2.15, 1.16]);
 
@@ -280,4 +303,18 @@ fn encode_complex_slice() {
     assert_eq!(decoder.float32().unwrap(), 2.15);
     assert_eq!(decoder.float32().unwrap(), 1.16);
     assert_eq!(decoder.end(), true);
+}
+
+#[test]
+fn decode_complex_vec() {
+    let buffer = Encoder::new()
+                        .size(3)
+                        .float32(3.14)
+                        .float32(2.15)
+                        .float32(1.16)
+                        .end();
+
+    let floats: Vec<f32> = Decoder::decode(&buffer).unwrap();
+
+    assert_eq!(floats, &[3.14, 2.15, 1.16]);
 }

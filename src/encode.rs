@@ -1,16 +1,5 @@
 use std::{ptr, mem};
-
-pub static SIZE_MASKS: [u8; 9] = [
-    0b00000000,
-    0b10000000,
-    0b11000000,
-    0b11100000,
-    0b11110000,
-    0b11111000,
-    0b11111100,
-    0b11111110,
-    0b11111111
-];
+use utils::SIZE_MASKS;
 
 /// Encoder takes in typed data and produces a binary buffer
 /// represented as `Vec<u8>`.
@@ -21,7 +10,6 @@ pub struct Encoder {
 }
 
 pub trait BitEncodable {
-    #[inline(always)]
     fn encode(&self, &mut Encoder);
 
     #[inline(always)]
@@ -58,7 +46,7 @@ impl Encoder {
     }
 
     /// Store any type implementing `BitEncodable` on the buffer.
-    pub fn push<E: BitEncodable>(&mut self, val: E) -> &mut Self {
+    pub fn write<E: BitEncodable>(&mut self, val: E) -> &mut Self {
         val.encode(self);
 
         self
@@ -314,15 +302,8 @@ impl BitEncodable for f64 {
     }
 }
 
-impl BitEncodable for usize {
-    #[inline(always)]
-    fn encode(&self, e: &mut Encoder) {
-        e.size_with_reserve(*self, 0);
-    }
-}
-
 impl BitEncodable for bool {
-    #[inline(always)]
+    #[inline]
     fn encode(&self, e: &mut Encoder) {
         let bit = *self as u8;
         let index = e.data.len();
@@ -335,6 +316,13 @@ impl BitEncodable for bool {
             e.bool_shift = 0;
             e.data.push(bit);
         }
+    }
+}
+
+impl BitEncodable for usize {
+    #[inline(always)]
+    fn encode(&self, e: &mut Encoder) {
+        e.size_with_reserve(*self, 0);
     }
 }
 
@@ -358,12 +346,22 @@ impl BitEncodable for [u8] {
             e.data.set_len(len + self.len());
         }
     }
+
+    #[inline(always)]
+    fn size_hint() -> usize {
+        16
+    }
 }
 
 impl<'a> BitEncodable for &'a [u8] {
     #[inline(always)]
     fn encode(&self, e: &mut Encoder) {
         BitEncodable::encode(*self, e);
+    }
+
+    #[inline(always)]
+    fn size_hint() -> usize {
+        16
     }
 }
 
@@ -398,12 +396,22 @@ impl<'a> BitEncodable for &'a Vec<u8> {
     fn encode(&self, e: &mut Encoder) {
         BitEncodable::encode(AsRef::<[u8]>::as_ref(*self), e);
     }
+
+    #[inline(always)]
+    fn size_hint() -> usize {
+        16
+    }
 }
 
 impl<'a> BitEncodable for &'a str {
     #[inline(always)]
     fn encode(&self, e: &mut Encoder) {
         BitEncodable::encode(self.as_bytes(), e);
+    }
+
+    #[inline(always)]
+    fn size_hint() -> usize {
+        16
     }
 }
 
@@ -412,6 +420,11 @@ impl BitEncodable for String {
     fn encode(&self, e: &mut Encoder) {
         BitEncodable::encode(self.as_bytes(), e);
     }
+
+    #[inline(always)]
+    fn size_hint() -> usize {
+        16
+    }
 }
 
 impl<'a> BitEncodable for &'a String {
@@ -419,28 +432,68 @@ impl<'a> BitEncodable for &'a String {
     fn encode(&self, e: &mut Encoder) {
         BitEncodable::encode(self.as_bytes(), e);
     }
+
+    #[inline(always)]
+    fn size_hint() -> usize {
+        16
+    }
 }
 
-impl<B: BitEncodable> BitEncodable for [B] {
+impl<E: BitEncodable> BitEncodable for [E] {
     #[inline(always)]
     fn encode(&self, e: &mut Encoder) {
-        e.size_with_reserve(self.len(), B::size_hint());
+        e.size_with_reserve(self.len(), E::size_hint());
         for item in self {
             BitEncodable::encode(item, e);
         }
     }
 }
 
-impl<'a, B: BitEncodable> BitEncodable for &'a [B] {
+impl<'a, E: BitEncodable> BitEncodable for &'a [E] {
     #[inline(always)]
     fn encode(&self, e: &mut Encoder) {
         BitEncodable::encode(*self, e);
     }
 }
 
-impl<'a, B: BitEncodable> BitEncodable for &'a Vec<B> {
+impl<'a, E: BitEncodable> BitEncodable for &'a Vec<E> {
     #[inline(always)]
     fn encode(&self, e: &mut Encoder) {
-        BitEncodable::encode(AsRef::<[B]>::as_ref(*self), e);
+        BitEncodable::encode(AsRef::<[E]>::as_ref(*self), e);
     }
 }
+
+macro_rules! impl_tuple {
+    ($( $l:ident: $n:tt ),*) => {
+        impl<$($l),*> BitEncodable for ($($l),*) where
+            $(
+                $l: BitEncodable,
+            )*
+        {
+            #[inline(always)]
+            fn encode(&self, e: &mut Encoder) {
+                e.data.reserve(Self::size_hint());
+
+                $(
+                    self.$n.encode(e);
+                )*
+            }
+
+            #[inline]
+            fn size_hint() -> usize {
+                $( $l::size_hint() + )* 0
+            }
+        }
+    }
+}
+
+
+impl_tuple!(A: 0, B: 1);
+impl_tuple!(A: 0, B: 1, C: 2);
+impl_tuple!(A: 0, B: 1, C: 2, D: 3);
+impl_tuple!(A: 0, B: 1, C: 2, D: 3, E: 4);
+impl_tuple!(A: 0, B: 1, C: 2, D: 3, E: 4, F: 5);
+impl_tuple!(A: 0, B: 1, C: 2, D: 3, E: 4, F: 5, G: 6);
+impl_tuple!(A: 0, B: 1, C: 2, D: 3, E: 4, F: 5, G: 6, H: 7);
+impl_tuple!(A: 0, B: 1, C: 2, D: 3, E: 4, F: 5, G: 6, H: 7, I: 8);
+impl_tuple!(A: 0, B: 1, C: 2, D: 3, E: 4, F: 5, G: 6, H: 7, I: 8, J: 9);

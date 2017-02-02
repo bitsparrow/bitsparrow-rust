@@ -7,15 +7,6 @@ use bitsparrow::{Encoder, Decoder};
 use test::Bencher;
 
 #[bench]
-fn allocate_8(b: &mut Bencher) {
-    b.iter(|| {
-        let foo: Vec<u8> = Vec::with_capacity(8);
-
-        foo
-    })
-}
-
-#[bench]
 fn encode_u64(b: &mut Bencher) {
     b.iter(|| {
         Encoder::encode(::std::u64::MAX)
@@ -37,9 +28,9 @@ fn encode_slice(b: &mut Bencher) {
 }
 
 #[bench]
-fn encode_str(b: &mut Bencher) {
+fn encode_tuple(b: &mut Bencher) {
     b.iter(|| {
-        Encoder::encode("hello world!")
+        Encoder::encode(("hello world!", 3.14f32, false))
     })
 }
 
@@ -47,6 +38,24 @@ fn encode_str(b: &mut Bencher) {
 fn encode_complex_slice(b: &mut Bencher) {
     b.iter(|| {
         Encoder::encode(&[3.14f32, 2.15, 1.16])
+    })
+}
+
+#[bench]
+fn decode_complex_vec(b: &mut Bencher) {
+    let buffer = Encoder::encode(&[3.14f32, 2.15, 1.16]);
+
+    b.iter(|| {
+        let _foo: Vec<f32> = Decoder::decode(&buffer).unwrap();
+    })
+}
+
+#[bench]
+fn decode_tuple(b: &mut Bencher) {
+    let buffer = Encoder::encode((10u64, 3.14f32, true));
+
+    b.iter(|| {
+        let _foo: (u64, f32, bool) = Decoder::decode(&buffer).unwrap();
     })
 }
 
