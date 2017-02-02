@@ -14,7 +14,7 @@ pub trait BitEncodable {
 
     #[inline(always)]
     fn size_hint() -> usize {
-        1
+        0
     }
 }
 
@@ -40,7 +40,7 @@ impl Encoder {
     }
 
     pub fn encode<E: BitEncodable>(val: E) -> Vec<u8> {
-        let mut e = Encoder::new();
+        let mut e = Encoder::with_capacity(E::size_hint());
         val.encode(&mut e);
         e.data
     }

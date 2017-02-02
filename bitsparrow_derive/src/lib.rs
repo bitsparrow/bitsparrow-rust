@@ -27,12 +27,31 @@ pub fn derive_encodable(input: TokenStream) -> TokenStream {
         let ident = &field.ident;
 
         quote! { BitEncodable::encode(&self.#ident, e); }
-    });
+    }).collect::<Vec<_>>();
+
+    let size_hint = 8 * fields.len();
 
     let tokens = quote! {
         impl BitEncodable for #ident {
             fn encode(&self, e: &mut Encoder) {
                 #( #fields )*
+            }
+
+            #[inline]
+            fn size_hint() -> usize {
+                #size_hint
+            }
+        }
+
+        impl<'a> BitEncodable for &'a #ident {
+            #[inline]
+            fn encode(&self, e: &mut Encoder) {
+                BitEncodable::encode(*self, e)
+            }
+
+            #[inline]
+            fn size_hint() -> usize {
+                #size_hint
             }
         }
     };

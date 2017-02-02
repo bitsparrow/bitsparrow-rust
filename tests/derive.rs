@@ -15,11 +15,13 @@ struct Foo {
 
 #[test]
 fn encode_foo() {
-    let buffer = Encoder::encode(Foo {
+    let foo = Foo {
         bar: "hello".into(),
         baz: 1337u64,
         derp: true,
-    });
+    };
+
+    let buffer = Encoder::encode(&foo);
 
     let mut decoder = Decoder::new(&buffer);
 
