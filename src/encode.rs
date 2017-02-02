@@ -353,17 +353,34 @@ impl BitEncodable for [u8] {
     }
 }
 
-impl<'a> BitEncodable for &'a [u8] {
-    #[inline(always)]
-    fn encode(&self, e: &mut Encoder) {
-        BitEncodable::encode(*self, e);
-    }
+macro_rules! impl_deref {
+    ($t:ty, $size:expr) => {
+        impl<'a> BitEncodable for &'a $t {
+            #[inline(always)]
+            fn encode(&self, e: &mut Encoder) {
+                BitEncodable::encode(*self, e);
+            }
 
-    #[inline(always)]
-    fn size_hint() -> usize {
-        16
+            #[inline(always)]
+            fn size_hint() -> usize {
+                $size
+            }
+        }
     }
 }
+
+impl_deref!(u16, 2);
+impl_deref!(u32, 4);
+impl_deref!(u64, 8);
+impl_deref!(i8, 1);
+impl_deref!(i16, 2);
+impl_deref!(i32, 4);
+impl_deref!(i64, 8);
+impl_deref!(f32, 4);
+impl_deref!(f64, 8);
+impl_deref!(usize, 1);
+impl_deref!(bool, 1);
+impl_deref!([u8], 16);
 
 macro_rules! impl_array {
     ($( $size:expr ),*) => {

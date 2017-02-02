@@ -1,6 +1,6 @@
 [package]
-name = "bitsparrow"
-version = "2.0.0-alpha"
+name = "bitsparrow_derive"
+version = "0.1.0"
 authors = ["maciej.hirsz@gmail.com"]
 description = "BitSparrow implementation in Rust"
 homepage = "http://bitsparrow.io/"
@@ -8,5 +8,13 @@ documentation = "http://bitsparrow.io/doc/bitsparrow/"
 repository = "https://github.com/bitsparrow/bitsparrow-rust"
 license = "MIT"
 
-[dev-dependencies]
-bitsparrow_derive = { path = "bitsparrow_derive" }
+[features]
+unstable = []
+
+[lib]
+name = "bitsparrow_derive"
+proc-macro = true
+
+[dependencies]
+quote = "0.3.8"
+syn = "*" # { version = "0.11", features = ["aster", "visit"] }
