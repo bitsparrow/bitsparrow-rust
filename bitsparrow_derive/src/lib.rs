@@ -8,10 +8,10 @@ extern crate quote;
 extern crate proc_macro;
 use proc_macro::TokenStream;
 
-use syn::Body;
+use syn::{Body, Ident, VariantData};
 
 #[proc_macro_derive(BitEncode)]
-pub fn derive_encodable(input: TokenStream) -> TokenStream {
+pub fn derive_encode(input: TokenStream) -> TokenStream {
     let input = syn::parse_derive_input(&input.to_string()).unwrap();
 
     let ident = input.ident;
@@ -21,8 +21,9 @@ pub fn derive_encodable(input: TokenStream) -> TokenStream {
         _ => unimplemented!(),
     };
 
-    let fields = body.fields().iter().map(|field| {
-        let ident = &field.ident;
+    let fields = body.fields().iter().enumerate().map(|(i, field)| {
+        let index = Ident::from(i.to_string());
+        let ident = field.ident.as_ref().unwrap_or(&index);
 
         quote! { BitEncode::encode(&self.#ident, e); }
     }).collect::<Vec<_>>();
@@ -58,7 +59,7 @@ pub fn derive_encodable(input: TokenStream) -> TokenStream {
 }
 
 #[proc_macro_derive(BitDecode)]
-pub fn derive_decodable(input: TokenStream) -> TokenStream {
+pub fn derive_decode(input: TokenStream) -> TokenStream {
     let input = syn::parse_derive_input(&input.to_string()).unwrap();
 
     let ident = input.ident;
@@ -69,17 +70,22 @@ pub fn derive_decodable(input: TokenStream) -> TokenStream {
     };
 
     let fields = body.fields().iter().map(|field| {
-        let ident = &field.ident;
-
-        quote! { #ident: BitDecode::decode(d)?, }
+        match field.ident {
+            Some(ref ident) => quote! { #ident: BitDecode::decode(d)?, },
+            None            => quote! { BitDecode::decode(d)?, }
+        }
     });
+
+    let body = match body {
+        VariantData::Struct(..) => quote! { Ok(#ident{ #( #fields )* }) },
+        VariantData::Tuple(..)  => quote! { Ok(#ident( #( #fields )* )) },
+        VariantData::Unit       => quote! { Ok(#ident) }
+    };
 
     let tokens = quote! {
         impl BitDecode for #ident {
             fn decode(d: &mut Decoder) -> Result<Self, Error> {
-                Ok(#ident {
-                    #( #fields )*
-                })
+                #body
             }
         }
     };

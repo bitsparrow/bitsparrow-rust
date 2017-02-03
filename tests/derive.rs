@@ -12,14 +12,12 @@ struct Foo {
 }
 
 #[derive(BitEncode, BitDecode, PartialEq, Debug)]
-struct Bar {
-    value: u64
-}
+struct Bar(u64);
 
 #[test]
 fn encode_foo() {
     let foo = Foo {
-        bar: vec![Bar { value: 10 }, Bar { value: 1337 }],
+        bar: vec![Bar(10), Bar(1337)],
         baz: "Hello world".into(),
         derp: true,
     };
@@ -38,7 +36,7 @@ fn decode_foo() {
     let foo: Foo = Decoder::decode(&buffer).unwrap();
 
     assert_eq!(foo, Foo {
-        bar: vec![Bar { value: 10 }, Bar { value: 1337 }],
+        bar: vec![Bar(10), Bar(1337)],
         baz: "Hello world".into(),
         derp: true,
     });
