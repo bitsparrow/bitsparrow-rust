@@ -58,5 +58,5 @@ mod decode;
 mod utils;
 
 pub use utils::Error;
-pub use encode::{Encoder, BitEncodable};
-pub use decode::{Decoder, BitDecodable};
+pub use encode::{Encoder, BitEncode};
+pub use decode::{Decoder, BitDecode};

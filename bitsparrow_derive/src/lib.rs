@@ -1,7 +1,5 @@
 // The `quote!` macro requires deep recursion.
 #![recursion_limit = "192"]
-#![feature(proc_macro)]
-#![feature(proc_macro_lib)]
 
 extern crate syn;
 #[macro_use]
@@ -12,7 +10,7 @@ use proc_macro::TokenStream;
 
 use syn::Body;
 
-#[proc_macro_derive(BitEncodable)]
+#[proc_macro_derive(BitEncode)]
 pub fn derive_encodable(input: TokenStream) -> TokenStream {
     let input = syn::parse_derive_input(&input.to_string()).unwrap();
 
@@ -26,13 +24,13 @@ pub fn derive_encodable(input: TokenStream) -> TokenStream {
     let fields = body.fields().iter().map(|field| {
         let ident = &field.ident;
 
-        quote! { BitEncodable::encode(&self.#ident, e); }
+        quote! { BitEncode::encode(&self.#ident, e); }
     }).collect::<Vec<_>>();
 
     let size_hint = 8 * fields.len();
 
     let tokens = quote! {
-        impl BitEncodable for #ident {
+        impl BitEncode for #ident {
             fn encode(&self, e: &mut Encoder) {
                 #( #fields )*
             }
@@ -43,10 +41,10 @@ pub fn derive_encodable(input: TokenStream) -> TokenStream {
             }
         }
 
-        impl<'a> BitEncodable for &'a #ident {
+        impl<'a> BitEncode for &'a #ident {
             #[inline]
             fn encode(&self, e: &mut Encoder) {
-                BitEncodable::encode(*self, e)
+                BitEncode::encode(*self, e)
             }
 
             #[inline]
@@ -59,7 +57,7 @@ pub fn derive_encodable(input: TokenStream) -> TokenStream {
     tokens.parse().unwrap()
 }
 
-#[proc_macro_derive(BitDecodable)]
+#[proc_macro_derive(BitDecode)]
 pub fn derive_decodable(input: TokenStream) -> TokenStream {
     let input = syn::parse_derive_input(&input.to_string()).unwrap();
 
@@ -73,11 +71,11 @@ pub fn derive_decodable(input: TokenStream) -> TokenStream {
     let fields = body.fields().iter().map(|field| {
         let ident = &field.ident;
 
-        quote! { #ident: BitDecodable::decode(d)?, }
+        quote! { #ident: BitDecode::decode(d)?, }
     });
 
     let tokens = quote! {
-        impl BitDecodable for #ident {
+        impl BitDecode for #ident {
             fn decode(d: &mut Decoder) -> Result<Self, Error> {
                 Ok(#ident {
                     #( #fields )*

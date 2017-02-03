@@ -1,5 +1,4 @@
 #![feature(test)]
-#![feature(proc_macro)]
 
 extern crate test;
 extern crate bitsparrow;
@@ -10,7 +9,7 @@ use bitsparrow::*;
 
 use test::Bencher;
 
-#[derive(BitEncodable, BitDecodable, PartialEq, Debug)]
+#[derive(BitEncode, BitDecode, PartialEq, Debug)]
 struct Foo {
     bar: String,
     baz: u64,

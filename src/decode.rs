@@ -13,7 +13,7 @@ pub struct Decoder<'a> {
     bool_shift: u8,
 }
 
-pub trait BitDecodable: Sized {
+pub trait BitDecode: Sized {
     fn decode(&mut Decoder) -> Result<Self>;
 }
 
@@ -55,17 +55,17 @@ impl<'a> Decoder<'a> {
         }
     }
 
-    pub fn decode<D: BitDecodable>(data: &[u8]) -> Result<D> {
+    pub fn decode<D: BitDecode>(data: &[u8]) -> Result<D> {
         let mut d = Decoder::new(data);
-        let value = try!(BitDecodable::decode(&mut d));
+        let value = try!(BitDecode::decode(&mut d));
         if !d.end() {
             return Err(Error::BufferNotEmpty);
         }
         Ok(value)
     }
 
-    pub fn read<D: BitDecodable>(&mut self) -> Result<D> {
-        BitDecodable::decode(self)
+    pub fn read<D: BitDecode>(&mut self) -> Result<D> {
+        BitDecode::decode(self)
     }
 
     /// Read a `u8` from the buffer and progress the internal index.
@@ -246,7 +246,7 @@ impl<'a> Decoder<'a> {
 
 macro_rules! impl_decodable {
     ($func:ident, $t:ty) => {
-        impl BitDecodable for $t {
+        impl BitDecode for $t {
             #[inline]
             fn decode(d: &mut Decoder) -> Result<Self> {
                 d.$func()
@@ -267,21 +267,21 @@ impl_decodable!(float64, f64);
 impl_decodable!(bool, bool);
 impl_decodable!(size, usize);
 
-impl BitDecodable for Vec<u8> {
+impl BitDecode for Vec<u8> {
     #[inline]
     fn decode(d: &mut Decoder) -> Result<Self> {
         d.bytes().map(Into::into)
     }
 }
 
-impl BitDecodable for String {
+impl BitDecode for String {
     #[inline]
     fn decode(d: &mut Decoder) -> Result<Self> {
         d.string().map(Into::into)
     }
 }
 
-impl<D: BitDecodable> BitDecodable for Vec<D> {
+impl<D: BitDecode> BitDecode for Vec<D> {
     #[inline]
     fn decode(d: &mut Decoder) -> Result<Self> {
         let size = try!(d.size());
@@ -298,9 +298,9 @@ impl<D: BitDecodable> BitDecodable for Vec<D> {
 
 macro_rules! impl_tuple {
     ($( $l:ident ),*) => {
-        impl<$($l),*> BitDecodable for ($($l),*) where
+        impl<$($l),*> BitDecode for ($($l),*) where
             $(
-                $l: BitDecodable,
+                $l: BitDecode,
             )*
         {
             #[inline(always)]

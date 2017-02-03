@@ -1,45 +1,45 @@
-#![feature(custom_derive)]
-#![feature(proc_macro)]
-
 extern crate bitsparrow;
-#[macro_use] extern crate bitsparrow_derive;
+#[macro_use]
+extern crate bitsparrow_derive;
 
 use bitsparrow::*;
 
-#[derive(BitEncodable, BitDecodable, PartialEq, Debug)]
+#[derive(BitEncode, BitDecode, PartialEq, Debug)]
 struct Foo {
-    bar: String,
-    baz: u64,
+    bar: Vec<Bar>,
+    baz: String,
     derp: bool,
+}
+
+#[derive(BitEncode, BitDecode, PartialEq, Debug)]
+struct Bar {
+    value: u64
 }
 
 #[test]
 fn encode_foo() {
     let foo = Foo {
-        bar: "hello".into(),
-        baz: 1337u64,
+        bar: vec![Bar { value: 10 }, Bar { value: 1337 }],
+        baz: "Hello world".into(),
         derp: true,
     };
 
     let buffer = Encoder::encode(&foo);
 
-    let mut decoder = Decoder::new(&buffer);
+    let decoded: (Vec<u64>, String, bool) = Decoder::decode(&buffer).unwrap();
 
-    assert_eq!(decoder.string().unwrap(), "hello");
-    assert_eq!(decoder.uint64().unwrap(), 1337);
-    assert_eq!(decoder.bool().unwrap(), true);
-    assert_eq!(decoder.end(), true);
+    assert_eq!(decoded, (vec![10, 1337], "Hello world".into(), true));
 }
 
 #[test]
 fn decode_foo() {
-    let buffer = Encoder::encode(("hello", 1337u64, true));
+    let buffer = Encoder::encode(([10u64, 1337], "Hello world", true));
 
     let foo: Foo = Decoder::decode(&buffer).unwrap();
 
     assert_eq!(foo, Foo {
-        bar: "hello".into(),
-        baz: 1337,
+        bar: vec![Bar { value: 10 }, Bar { value: 1337 }],
+        baz: "Hello world".into(),
         derp: true,
     });
 }
