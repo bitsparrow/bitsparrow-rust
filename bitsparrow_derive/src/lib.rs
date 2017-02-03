@@ -8,7 +8,52 @@ extern crate quote;
 extern crate proc_macro;
 use proc_macro::TokenStream;
 
+use quote::Tokens;
 use syn::{Body, Ident, VariantData};
+
+fn encode_ident(ident: Ident) -> Tokens {
+    quote! { BitEncode::encode(&self.#ident, e); }
+}
+
+fn encode_struct(mut body: VariantData) -> (usize, Tokens) {
+    let fields = match body {
+        VariantData::Struct(ref mut body) => {
+            body.iter_mut()
+                .map(|field| field.ident.take().unwrap())
+                .map(encode_ident)
+                .collect()
+        },
+        VariantData::Tuple(ref body) => {
+            body.iter()
+                .enumerate()
+                .map(|(i, _)| i.to_string().into())
+                .map(encode_ident)
+                .collect()
+        },
+        VariantData::Unit => Vec::new(),
+    };
+
+    (8 * fields.len(), quote! { #( #fields )* })
+}
+
+fn decode_struct(ident: &Ident, body: VariantData) -> Tokens {
+    match body {
+        VariantData::Struct(ref body) => {
+            let fields = body
+                .iter()
+                .map(|field| &field.ident)
+                .map(|ident| quote! { #ident: BitDecode::decode(d)?, });
+
+            quote! { Ok(#ident{ #( #fields )* }) }
+        },
+        VariantData::Tuple(ref b) => {
+            let fields = b.iter().map(|_| quote! { BitDecode::decode(d)? });
+
+            quote! { Ok(#ident( #( #fields )* )) }
+        },
+        VariantData::Unit => quote! { Ok(#ident) }
+    }
+}
 
 #[proc_macro_derive(BitEncode)]
 pub fn derive_encode(input: TokenStream) -> TokenStream {
@@ -16,24 +61,15 @@ pub fn derive_encode(input: TokenStream) -> TokenStream {
 
     let ident = input.ident;
 
-    let body = match input.body {
-        Body::Struct(body) => body,
-        _ => unimplemented!(),
+    let (size_hint, body) = match input.body {
+        Body::Struct(body) => encode_struct(body),
+        Body::Enum(_variants) => unimplemented!(),
     };
-
-    let fields = body.fields().iter().enumerate().map(|(i, field)| {
-        let index = Ident::from(i.to_string());
-        let ident = field.ident.as_ref().unwrap_or(&index);
-
-        quote! { BitEncode::encode(&self.#ident, e); }
-    }).collect::<Vec<_>>();
-
-    let size_hint = 8 * fields.len();
 
     let tokens = quote! {
         impl BitEncode for #ident {
             fn encode(&self, e: &mut Encoder) {
-                #( #fields )*
+                #body
             }
 
             #[inline]
@@ -65,21 +101,8 @@ pub fn derive_decode(input: TokenStream) -> TokenStream {
     let ident = input.ident;
 
     let body = match input.body {
-        Body::Struct(body) => body,
-        _ => unimplemented!(),
-    };
-
-    let fields = body.fields().iter().map(|field| {
-        match field.ident {
-            Some(ref ident) => quote! { #ident: BitDecode::decode(d)?, },
-            None            => quote! { BitDecode::decode(d)?, }
-        }
-    });
-
-    let body = match body {
-        VariantData::Struct(..) => quote! { Ok(#ident{ #( #fields )* }) },
-        VariantData::Tuple(..)  => quote! { Ok(#ident( #( #fields )* )) },
-        VariantData::Unit       => quote! { Ok(#ident) }
+        Body::Struct(body) => decode_struct(&ident, body),
+        Body::Enum(_variants) => unimplemented!(),
     };
 
     let tokens = quote! {
