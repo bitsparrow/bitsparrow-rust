@@ -9,7 +9,7 @@ extern crate proc_macro;
 use proc_macro::TokenStream;
 
 use quote::Tokens;
-use syn::{Body, Ident, VariantData};
+use syn::{Body, Ident, VariantData, Variant};
 
 fn encode_ident(ident: Ident) -> Tokens {
     quote! { BitEncode::encode(&self.#ident, e); }
@@ -34,6 +34,14 @@ fn encode_struct(mut body: VariantData) -> (usize, Tokens) {
     };
 
     (8 * fields.len(), quote! { #( #fields )* })
+}
+
+fn encode_enum(ident: &Ident, variants: Vec<Variant>) -> (usize, Tokens) {
+    let matches = variants.iter().enumerate().map(|(index, variant)| {
+        quote! { #ident::#variant => BitEncode::encode(&#index, e), }
+    });
+
+    (1, quote! { match *self { #( #matches )* }; })
 }
 
 fn decode_struct(ident: &Ident, body: VariantData) -> Tokens {
@@ -63,7 +71,7 @@ pub fn derive_encode(input: TokenStream) -> TokenStream {
 
     let (size_hint, body) = match input.body {
         Body::Struct(body) => encode_struct(body),
-        Body::Enum(_variants) => unimplemented!(),
+        Body::Enum(variants) => encode_enum(&ident, variants),
     };
 
     let tokens = quote! {

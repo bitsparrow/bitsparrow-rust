@@ -12,32 +12,48 @@ struct Foo {
 }
 
 #[derive(BitEncode, BitDecode, PartialEq, Debug)]
-struct Bar(u64);
+struct Bar(u16);
+
+#[derive(BitEncode, PartialEq, Debug)]
+enum Doge {
+    To,
+    The,
+    Moon,
+}
 
 #[test]
-fn encode_foo() {
+fn structs() {
     let foo = Foo {
         bar: vec![Bar(10), Bar(1337)],
         baz: "Hello world".into(),
         derp: true,
     };
 
+    let expect = vec![
+        2,                                                      // Vec length
+        0x00,0x0A,                                              // |-> 10
+        0x05,0x39,                                              // `-> 1337
+        11,                                                     // String length
+        b'H',b'e',b'l',b'l',b'o',b' ',b'w',b'o',b'r',b'l',b'd', // `-> String data
+        1                                                       // bool
+    ];
+
     let buffer = Encoder::encode(&foo);
 
-    let decoded: (Vec<u64>, String, bool) = Decoder::decode(&buffer).unwrap();
+    let decoded: Foo = Decoder::decode(&buffer).unwrap();
 
-    assert_eq!(decoded, (vec![10, 1337], "Hello world".into(), true));
+    assert_eq!(buffer, expect);
+    assert_eq!(decoded, foo);
 }
 
 #[test]
-fn decode_foo() {
-    let buffer = Encoder::encode(([10u64, 1337], "Hello world", true));
+fn plain_enums() {
+    let doges = (Doge::To, Doge::The, Doge::Moon);
 
-    let foo: Foo = Decoder::decode(&buffer).unwrap();
+    let buffer = Encoder::encode(doges);
 
-    assert_eq!(foo, Foo {
-        bar: vec![Bar(10), Bar(1337)],
-        baz: "Hello world".into(),
-        derp: true,
-    });
+    // let decoded: (Doge, Doge, Doge) = Decoder::decode(&buffer).unwrap();
+
+    assert_eq!(buffer, vec![0x00,0x01,0x02]);
+    // assert_eq!(decoded, doges);
 }
