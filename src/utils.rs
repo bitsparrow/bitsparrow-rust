@@ -19,6 +19,7 @@ pub enum Error {
     Utf8Encoding,
     ReadingOutOfBounds,
     BufferNotEmpty,
+    InvalidData,
 }
 
 impl error::Error for Error {
@@ -29,6 +30,7 @@ impl error::Error for Error {
             Utf8Encoding       => "Couldn't decode UTF-8 string",
             ReadingOutOfBounds => "Attempted to read out of bounds",
             BufferNotEmpty     => "There is still data to read",
+            InvalidData        => "Data does not match requested type",
         }
     }
 }

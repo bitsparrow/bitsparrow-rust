@@ -542,6 +542,22 @@ macro_rules! impl_tuple {
                 $( $l::size_hint() + )* 0
             }
         }
+
+        impl<'a, $($l),*> BitEncode for &'a ($($l),*) where
+            $(
+                $l: BitEncode,
+            )*
+        {
+            #[inline(always)]
+            fn encode(&self, e: &mut Encoder) {
+                BitEncode::encode(*self, e);
+            }
+
+            #[inline]
+            fn size_hint() -> usize {
+                $( $l::size_hint() + )* 0
+            }
+        }
     }
 }
 

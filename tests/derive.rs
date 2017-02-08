@@ -14,11 +14,14 @@ struct Foo {
 #[derive(BitEncode, BitDecode, PartialEq, Debug)]
 struct Bar(u16);
 
-#[derive(BitEncode, PartialEq, Debug)]
+#[derive(BitEncode, BitDecode, PartialEq, Debug)]
 enum Doge {
-    To,
+    Moon {
+        is: String,
+        of: String,
+    },
+    To(Vec<u16>),
     The,
-    Moon,
 }
 
 #[test]
@@ -39,7 +42,6 @@ fn structs() {
     ];
 
     let buffer = Encoder::encode(&foo);
-
     let decoded: Foo = Decoder::decode(&buffer).unwrap();
 
     assert_eq!(buffer, expect);
@@ -48,12 +50,21 @@ fn structs() {
 
 #[test]
 fn plain_enums() {
-    let doges = (Doge::To, Doge::The, Doge::Moon);
+    let doges = (
+        Doge::To(vec![1,2,3]),
+        Doge::The,
+        Doge::Moon { is: "made".into(), of: "cheese".into() }
+    );
 
-    let buffer = Encoder::encode(doges);
+    let expect = vec![
+        0x01,0x03,0x00,0x01,0x00,0x02,0x00,0x03,
+        0x02,
+        0x00,0x04,b'm',b'a',b'd',b'e',0x06,b'c',b'h',b'e',b'e',b's',b'e'
+    ];
 
-    // let decoded: (Doge, Doge, Doge) = Decoder::decode(&buffer).unwrap();
+    let buffer = Encoder::encode(&doges);
+    let decoded: (Doge, Doge, Doge) = Decoder::decode(&buffer).unwrap();
 
-    assert_eq!(buffer, vec![0x00,0x01,0x02]);
-    // assert_eq!(decoded, doges);
+    assert_eq!(buffer, expect);
+    assert_eq!(decoded, doges);
 }

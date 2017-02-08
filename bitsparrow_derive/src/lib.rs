@@ -38,7 +38,54 @@ fn encode_struct(mut body: VariantData) -> (usize, Tokens) {
 
 fn encode_enum(ident: &Ident, variants: Vec<Variant>) -> (usize, Tokens) {
     let matches = variants.iter().enumerate().map(|(index, variant)| {
-        quote! { #ident::#variant => BitEncode::encode(&#index, e), }
+        let varident = variant.ident.clone();
+
+        match variant.data {
+            VariantData::Struct(ref body) => {
+                let mut refs = Vec::new();
+
+                let fields: Vec<_> = body
+                    .iter()
+                    .map(|field| field.ident.clone())
+                    .map(|ident| {
+                        refs.push(quote! { ref #ident });
+
+                        quote! { BitEncode::encode(#ident, e); }
+                    })
+                    .collect();
+
+                quote! {
+                    #ident::#varident {#( #refs ),*} => {
+                        BitEncode::encode(&#index, e);
+                        #( #fields )*
+                    },
+                }
+            },
+            VariantData::Tuple(ref body) => {
+                let mut refs = Vec::new();
+
+                let fields: Vec<_> = body
+                    .iter()
+                    .enumerate()
+                    .map(|(i, _)| Ident::from(format!("ref{}", i)))
+                    .map(|ident| {
+                        refs.push(quote! { ref #ident });
+
+                        quote! { BitEncode::encode(#ident, e); }
+                    })
+                    .collect();
+
+                quote! {
+                    #ident::#varident(#( #refs ),*) => {
+                        BitEncode::encode(&#index, e);
+                        #( #fields )*
+                    },
+                }
+            },
+            VariantData::Unit => quote! {
+                #ident::#varident => BitEncode::encode(&#index, e),
+            },
+        }
     });
 
     (1, quote! { match *self { #( #matches )* }; })
@@ -52,14 +99,30 @@ fn decode_struct(ident: &Ident, body: VariantData) -> Tokens {
                 .map(|field| &field.ident)
                 .map(|ident| quote! { #ident: BitDecode::decode(d)?, });
 
-            quote! { Ok(#ident{ #( #fields )* }) }
+            quote! { #ident{ #( #fields )* } }
         },
-        VariantData::Tuple(ref b) => {
-            let fields = b.iter().map(|_| quote! { BitDecode::decode(d)? });
+        VariantData::Tuple(ref body) => {
+            let fields = body.iter().map(|_| quote! { BitDecode::decode(d)? });
 
-            quote! { Ok(#ident( #( #fields )* )) }
+            quote! { #ident( #( #fields )* ) }
         },
-        VariantData::Unit => quote! { Ok(#ident) }
+        VariantData::Unit => quote! { #ident }
+    }
+}
+
+fn decode_enum(ident: &Ident, variants: Vec<Variant>) -> Tokens {
+    let matches = variants.into_iter().enumerate().map(|(index, variant)| {
+        let varident = variant.ident.clone();
+        let varstruct = decode_struct(&varident, variant.data);
+
+        quote! { #index => #ident::#varstruct, }
+    });
+
+    quote! {
+        match BitDecode::decode(d)? {
+            #( #matches )*
+            _ => return Err(Error::InvalidData)
+        }
     }
 }
 
@@ -110,13 +173,13 @@ pub fn derive_decode(input: TokenStream) -> TokenStream {
 
     let body = match input.body {
         Body::Struct(body) => decode_struct(&ident, body),
-        Body::Enum(_variants) => unimplemented!(),
+        Body::Enum(variants) => decode_enum(&ident, variants),
     };
 
     let tokens = quote! {
         impl BitDecode for #ident {
             fn decode(d: &mut Decoder) -> Result<Self, Error> {
-                #body
+                Ok(#body)
             }
         }
     };
