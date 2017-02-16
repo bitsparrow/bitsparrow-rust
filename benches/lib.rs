@@ -2,19 +2,10 @@
 
 extern crate test;
 extern crate bitsparrow;
-#[macro_use]
-extern crate bitsparrow_derive;
 
 use bitsparrow::*;
 
 use test::Bencher;
-
-#[derive(BitEncode, BitDecode, PartialEq, Debug)]
-struct Foo {
-    bar: String,
-    baz: u64,
-    derp: bool,
-}
 
 #[bench]
 fn encode_u64(b: &mut Bencher) {
@@ -27,19 +18,6 @@ fn encode_u64(b: &mut Bencher) {
 fn encode_f64(b: &mut Bencher) {
     b.iter(|| {
         Encoder::encode(3.141592653589793f64)
-    })
-}
-
-#[bench]
-fn encode_derived_struct(b: &mut Bencher) {
-    let foo = Foo {
-        bar: "hello".into(),
-        baz: 1337u64,
-        derp: true,
-    };
-
-    b.iter(|| {
-        Encoder::encode(&foo)
     })
 }
 
