@@ -318,3 +318,14 @@ fn decode_complex_vec() {
 
     assert_eq!(floats, &[3.14, 2.15, 1.16]);
 }
+
+#[test]
+fn encode_decode_slices() {
+    let data: (&str, &[u8]) = ("foo", b"bar");
+
+    let buffer = Encoder::encode(data);
+
+    let decoded: (&str, &[u8]) = Decoder::decode(&buffer).unwrap();
+
+    assert_eq!(data, decoded);
+}

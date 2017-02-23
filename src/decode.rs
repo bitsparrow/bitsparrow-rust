@@ -6,15 +6,15 @@ use utils::{SIZE_MASKS, Error, Result};
 /// Decoder reads from a binary slice buffer (`&[u8]`) and exposes
 /// methods to read BitSparrow types from it in the same order they
 /// were encoded by the `Encoder`.
-pub struct Decoder<'a> {
+pub struct Decoder<'src> {
     index: usize,
-    data: &'a [u8],
+    data: &'src [u8],
     bool_index: usize,
     bool_shift: u8,
 }
 
-pub trait BitDecode: Sized {
-    fn decode(&mut Decoder) -> Result<Self>;
+pub trait BitDecode<'src>: Sized + 'src {
+    fn decode(&mut Decoder<'src>) -> Result<Self>;
 }
 
 macro_rules! read_bytes {
@@ -43,7 +43,7 @@ macro_rules! read_bytes {
 }
 
 
-impl<'a> Decoder<'a> {
+impl<'src> Decoder<'src> {
     /// Create a new `Decoder` reading from a `&[u8]` slice buffer.
     #[inline]
     pub fn new(data: &[u8]) -> Decoder {
@@ -55,7 +55,7 @@ impl<'a> Decoder<'a> {
         }
     }
 
-    pub fn decode<D: BitDecode>(data: &[u8]) -> Result<D> {
+    pub fn decode<D: BitDecode<'src>>(data: &'src [u8]) -> Result<D> {
         let mut d = Decoder::new(data);
         let value = try!(BitDecode::decode(&mut d));
         if !d.end() {
@@ -64,7 +64,7 @@ impl<'a> Decoder<'a> {
         Ok(value)
     }
 
-    pub fn read<D: BitDecode>(&mut self) -> Result<D> {
+    pub fn read<D: BitDecode<'src>>(&mut self) -> Result<D> {
         BitDecode::decode(self)
     }
 
@@ -209,7 +209,7 @@ impl<'a> Decoder<'a> {
     /// `size` so you don't have to worry about how many bytes
     /// you need to read.
     #[inline]
-    pub fn bytes(&mut self) -> Result<&'a [u8]> {
+    pub fn bytes(&mut self) -> Result<&'src [u8]> {
         // Order of addition is important here!
         // Calling `size` will modify the `index`.
         let end = try!(self.size()) + self.index;
@@ -232,7 +232,7 @@ impl<'a> Decoder<'a> {
     /// `string` with `size` so you don't have to worry about how
     /// many bytes you need to read.
     #[inline]
-    pub fn string(&mut self) -> Result<&str> {
+    pub fn string(&mut self) -> Result<&'src str> {
         from_utf8(self.bytes()?).map_err(Into::into)
     }
 
@@ -246,9 +246,9 @@ impl<'a> Decoder<'a> {
 
 macro_rules! impl_decodable {
     ($func:ident, $t:ty) => {
-        impl BitDecode for $t {
+        impl<'src> BitDecode<'src> for $t {
             #[inline]
-            fn decode(d: &mut Decoder) -> Result<Self> {
+            fn decode(d: &mut Decoder<'src>) -> Result<Self> {
                 d.$func()
             }
         }
@@ -267,23 +267,37 @@ impl_decodable!(float64, f64);
 impl_decodable!(bool, bool);
 impl_decodable!(size, usize);
 
-impl BitDecode for Vec<u8> {
+impl<'src> BitDecode<'src> for &'src [u8] {
     #[inline]
-    fn decode(d: &mut Decoder) -> Result<Self> {
+    fn decode(d: &mut Decoder<'src>) -> Result<Self> {
+        d.bytes()
+    }
+}
+
+impl<'src> BitDecode<'src> for Vec<u8> {
+    #[inline]
+    fn decode(d: &mut Decoder<'src>) -> Result<Self> {
         d.bytes().map(Into::into)
     }
 }
 
-impl BitDecode for String {
+impl<'src> BitDecode<'src> for &'src str {
     #[inline]
-    fn decode(d: &mut Decoder) -> Result<Self> {
+    fn decode(d: &mut Decoder<'src>) -> Result<&'src str> {
+        d.string()
+    }
+}
+
+impl<'src> BitDecode<'src> for String {
+    #[inline]
+    fn decode(d: &mut Decoder<'src>) -> Result<Self> {
         d.string().map(Into::into)
     }
 }
 
-impl<D: BitDecode> BitDecode for Vec<D> {
+impl<'src, D: BitDecode<'src>> BitDecode<'src> for Vec<D> {
     #[inline]
-    fn decode(d: &mut Decoder) -> Result<Self> {
+    fn decode(d: &mut Decoder<'src>) -> Result<Self> {
         let size = try!(d.size());
 
         let mut vec = Vec::with_capacity(size);
@@ -298,13 +312,13 @@ impl<D: BitDecode> BitDecode for Vec<D> {
 
 macro_rules! impl_tuple {
     ($( $l:ident ),*) => {
-        impl<$($l),*> BitDecode for ($($l),*) where
+        impl<'src, $($l),*> BitDecode<'src> for ($($l),*) where
             $(
-                $l: BitDecode,
+                $l: BitDecode<'src>,
             )*
         {
             #[inline(always)]
-            fn decode(d: &mut Decoder) -> Result<Self> {
+            fn decode(d: &mut Decoder<'src>) -> Result<Self> {
                 Ok(( $( try!($l::decode(d)) ),* ))
             }
         }
