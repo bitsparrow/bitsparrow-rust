@@ -9,6 +9,7 @@ use utils::{SIZE_MASKS, Error, Result};
 pub struct Decoder<'src> {
     index: usize,
     data: &'src [u8],
+    ptr: *const u8,
     bool_index: usize,
     bool_shift: u8,
 }
@@ -30,7 +31,7 @@ macro_rules! read_bytes {
             let ptr = &mut value as *mut $t as *mut u8;
 
             ptr::copy_nonoverlapping(
-                $decoder.data.as_ptr().offset($decoder.index as isize),
+                $decoder.ptr.offset($decoder.index as isize),
                 ptr,
                 size
             );
@@ -50,11 +51,13 @@ impl<'src> Decoder<'src> {
         Decoder {
             index: 0,
             data: data,
+            ptr: data.as_ptr(),
             bool_index: ::std::usize::MAX,
             bool_shift: 0,
         }
     }
 
+    #[inline]
     pub fn decode<D: BitDecode<'src>>(data: &'src [u8]) -> Result<D> {
         let mut d = Decoder::new(data);
         let value = try!(BitDecode::decode(&mut d));
@@ -64,6 +67,7 @@ impl<'src> Decoder<'src> {
         Ok(value)
     }
 
+    #[inline]
     pub fn read<D: BitDecode<'src>>(&mut self) -> Result<D> {
         BitDecode::decode(self)
     }
@@ -74,7 +78,7 @@ impl<'src> Decoder<'src> {
         if self.index >= self.data.len() {
             return Err(Error::ReadingOutOfBounds);
         }
-        let uint8 = self.data[self.index];
+        let uint8 = unsafe { *self.ptr.offset(self.index as isize) };
         self.index += 1;
         return Ok(uint8);
     }
@@ -165,6 +169,7 @@ impl<'src> Decoder<'src> {
     /// // Ensure we've read the entire buffer
     /// assert_eq!(true, decoder.end());
     /// ```
+    #[inline]
     pub fn bool(&mut self) -> Result<bool> {
         if self.bool_index == self.index && self.bool_shift < 7 {
             self.bool_shift += 1;
@@ -183,6 +188,7 @@ impl<'src> Decoder<'src> {
     /// Read a `usize` from the buffer and progress the index. Detailed
     /// explanation on how BitSparrow stores `size` can be found on
     /// [the homepage](http://bitsparrow.io).
+    #[inline(always)]
     pub fn size(&mut self) -> Result<usize> {
         let high = try!(self.uint8());
 
@@ -212,13 +218,17 @@ impl<'src> Decoder<'src> {
     pub fn bytes(&mut self) -> Result<&'src [u8]> {
         // Order of addition is important here!
         // Calling `size` will modify the `index`.
-        let end = try!(self.size()) + self.index;
+        let len = try!(self.size());
+        let end = len + self.index;
 
         if end > self.data.len() {
             return Err(Error::ReadingOutOfBounds);
         }
 
-        let bytes = &self.data[self.index .. end];
+        let bytes = unsafe { ::std::slice::from_raw_parts(
+            self.ptr.offset(self.index as isize),
+            len
+        ) };
 
         self.index = end;
 
@@ -233,7 +243,7 @@ impl<'src> Decoder<'src> {
     /// many bytes you need to read.
     #[inline]
     pub fn string(&mut self) -> Result<&'src str> {
-        from_utf8(self.bytes()?).map_err(Into::into)
+        from_utf8(try!(self.bytes())).map_err(Into::into)
     }
 
     /// Returns `true` if the entire buffer has been read, otherwise

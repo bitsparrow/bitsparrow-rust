@@ -39,6 +39,7 @@ impl Encoder {
         }
     }
 
+    #[inline]
     pub fn encode<E: BitEncode>(val: E) -> Vec<u8> {
         let mut e = Encoder::with_capacity(E::size_hint());
         val.encode(&mut e);
@@ -46,6 +47,7 @@ impl Encoder {
     }
 
     /// Store any type implementing `BitEncode` on the buffer.
+    #[inline]
     pub fn write<E: BitEncode>(&mut self, val: E) -> &mut Self {
         val.encode(self);
 
@@ -303,7 +305,7 @@ impl BitEncode for f64 {
 }
 
 impl BitEncode for bool {
-    #[inline]
+    #[inline(always)]
     fn encode(&self, e: &mut Encoder) {
         let bit = *self as u8;
         let index = e.data.len();
