@@ -31,7 +31,7 @@ macro_rules! read_bytes {
             let ptr = &mut value as *mut $t as *mut u8;
 
             ptr::copy_nonoverlapping(
-                $decoder.ptr.offset($decoder.index as isize),
+                $decoder.data.as_ptr().offset($decoder.index as isize),
                 ptr,
                 size
             );
@@ -287,7 +287,30 @@ impl<'src> BitDecode<'src> for &'src [u8] {
 impl<'src> BitDecode<'src> for Vec<u8> {
     #[inline]
     fn decode(d: &mut Decoder<'src>) -> Result<Self> {
-        d.bytes().map(Into::into)
+        // Order of addition is important here!
+        // Calling `size` will modify the `index`.
+        let len = try!(d.size());
+        let end = len + d.index;
+
+        if end > d.data.len() {
+            return Err(Error::ReadingOutOfBounds);
+        }
+
+        let mut vec = Vec::with_capacity(len);
+
+        unsafe {
+            ::std::ptr::copy_nonoverlapping(
+                d.ptr.offset(d.index as isize),
+                vec.as_mut_ptr(),
+                len
+            );
+
+            vec.set_len(len);
+        }
+
+        d.index = end;
+
+        Ok(vec)
     }
 }
 
@@ -301,7 +324,7 @@ impl<'src> BitDecode<'src> for &'src str {
 impl<'src> BitDecode<'src> for String {
     #[inline]
     fn decode(d: &mut Decoder<'src>) -> Result<Self> {
-        d.string().map(Into::into)
+        String::from_utf8(try!(BitDecode::decode(d))).map_err(Into::into)
     }
 }
 

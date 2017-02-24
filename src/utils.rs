@@ -1,5 +1,6 @@
 use std::{error, fmt};
 use std::str::Utf8Error;
+use std::string::FromUtf8Error;
 
 pub static SIZE_MASKS: [u8; 9] = [
     0b00000000,
@@ -43,6 +44,12 @@ impl fmt::Display for Error {
 
 impl From<Utf8Error> for Error {
     fn from(_: Utf8Error) -> Error {
+        Error::Utf8Encoding
+    }
+}
+
+impl From<FromUtf8Error> for Error {
+    fn from(_: FromUtf8Error) -> Error {
         Error::Utf8Encoding
     }
 }
